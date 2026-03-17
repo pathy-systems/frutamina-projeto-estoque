@@ -233,18 +233,25 @@ function findInText(text, map) {
   return null;
 }
 
-function extractNumber(text) {
-  const digitMatch = text.match(/\d+/);
-  if (digitMatch) {
-    return Number.parseInt(digitMatch[0], 10);
+function extractNumbers(text) {
+  const results = [];
+  const digitMatches = text.match(/\d+/g);
+  if (digitMatches) {
+    digitMatches.forEach((match) => {
+      const value = Number.parseInt(match, 10);
+      if (Number.isFinite(value)) {
+        results.push(value);
+      }
+    });
   }
   const normalized = normalizeText(text);
-  for (const [word, value] of Object.entries(NUMBER_WORDS)) {
-    if (normalized.includes(word)) {
-      return value;
+  const tokens = normalized.split(" ").filter(Boolean);
+  tokens.forEach((token) => {
+    if (Object.prototype.hasOwnProperty.call(NUMBER_WORDS, token)) {
+      results.push(NUMBER_WORDS[token]);
     }
-  }
-  return null;
+  });
+  return results;
 }
 
 function pushMessage(type, text) {
@@ -944,6 +951,13 @@ function buildMaps(setor) {
   return { products, productMap, brandMap, brandToProduct };
 }
 
+function formatTipoCounts(tipoCounts) {
+  return Array.from(tipoCounts.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([tipo, count]) => (count > 1 ? `${tipo}x${count}` : String(tipo)))
+    .join(", ");
+}
+
 async function processCommand(rawText) {
   const normInput = normalizeText(rawText);
   if (!normInput) return;
@@ -1004,8 +1018,8 @@ async function processCommand(rawText) {
     }
   }
 
-  const tipo = extractNumber(normInput);
-  if (tipo !== null) {
+  const tipos = extractNumbers(normInput);
+  if (tipos.length) {
     if (!state.produto || !state.marca) {
       pushMessage(
         "warn",
@@ -1025,42 +1039,70 @@ async function processCommand(rawText) {
       return;
     }
 
-    const caixasPallet = regra(tipo);
+    const tipoCounts = new Map();
+    tipos.forEach((value) => {
+      const tipo = Number.parseInt(value, 10);
+      if (Number.isNaN(tipo)) return;
+      tipoCounts.set(tipo, (tipoCounts.get(tipo) || 0) + 1);
+    });
+
+    if (!tipoCounts.size) {
+      renderContext();
+      return;
+    }
+
+    const tipoLabel = formatTipoCounts(tipoCounts);
     if (state.countMode === "new") {
-      updateSessionAggregateRecord({
-        setor: state.setor,
-        produto: state.produto,
-        marca: state.marca,
-        tipo,
-        caixas_pallet: caixasPallet,
+      tipoCounts.forEach((count, tipo) => {
+        const caixasPallet = regra(tipo);
+        updateSessionAggregateRecord({
+          setor: state.setor,
+          produto: state.produto,
+          marca: state.marca,
+          tipo,
+          caixas_pallet: caixasPallet,
+          palletsDelta: count,
+        });
       });
       renderCountTable();
       pushMessage(
         "success",
-        `Registrado (nova contagem): ${state.produto} ${state.marca} Tipo ${tipo}`
+        `Registrado (nova contagem): ${state.produto} ${state.marca} Tipos ${tipoLabel}`
       );
     } else {
-      updateAggregateRecord({
-        setor: state.setor,
-        produto: state.produto,
-        marca: state.marca,
-        tipo,
-        caixas_pallet: caixasPallet,
+      tipoCounts.forEach((count, tipo) => {
+        const caixasPallet = regra(tipo);
+        updateAggregateRecord({
+          setor: state.setor,
+          produto: state.produto,
+          marca: state.marca,
+          tipo,
+          caixas_pallet: caixasPallet,
+          palletsDelta: count,
+        });
       });
       renderPublicTable();
       renderCountTable();
       pushMessage(
         "success",
-        `Registrado: ${state.produto} ${state.marca} Tipo ${tipo}`
+        `Registrado: ${state.produto} ${state.marca} Tipos ${tipoLabel}`
       );
 
-      await upsertRecord({
-        setor: state.setor,
-        produto: state.produto,
-        marca: state.marca,
-        tipo,
-        caixas_pallet: caixasPallet,
+      const upserts = [];
+      tipoCounts.forEach((count, tipo) => {
+        const caixasPallet = regra(tipo);
+        upserts.push(
+          upsertRecord({
+            setor: state.setor,
+            produto: state.produto,
+            marca: state.marca,
+            tipo,
+            caixas_pallet: caixasPallet,
+            palletsDelta: count,
+          })
+        );
       });
+      await Promise.all(upserts);
       await loadUserRecords();
       await loadPublicRecords();
     }
@@ -1088,15 +1130,19 @@ function setupVoice() {
   recognition.lang = "pt-BR";
   recognition.interimResults = true;
   recognition.maxAlternatives = 1;
+  recognition.continuous = true;
 
   let listening = false;
+  let shouldListen = false;
 
   elements.voiceBtn.addEventListener("click", () => {
-    if (!listening) {
+    if (!shouldListen) {
+      shouldListen = true;
       recognition.start();
-    } else {
-      recognition.stop();
+      return;
     }
+    shouldListen = false;
+    recognition.stop();
   });
 
   recognition.onstart = () => {
@@ -1122,6 +1168,15 @@ function setupVoice() {
     if (elements.voiceCard) {
       elements.voiceCard.classList.remove("listening");
     }
+    if (shouldListen) {
+      setTimeout(() => {
+        try {
+          recognition.start();
+        } catch (error) {
+          // Ignora se o navegador ainda estiver finalizando a sessao anterior.
+        }
+      }, 200);
+    }
   };
 
   recognition.onerror = (event) => {
@@ -1130,6 +1185,11 @@ function setupVoice() {
     }
     if (elements.voiceCard) {
       elements.voiceCard.classList.remove("listening");
+    }
+    if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+      shouldListen = false;
+      elements.voiceBtn.textContent = "Sem permissao";
+      elements.voiceBtn.disabled = true;
     }
   };
 
