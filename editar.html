@@ -57,8 +57,67 @@
 
       <section id="count-panel" class="hidden">
         <div class="grid">
-          
-          
+          <section class="card voice-card" id="voice-card">
+            <div class="voice-visual" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <button id="voice-btn" class="primary voice-action">Iniciar escuta</button>
+            <div id="voice-status" class="voice-status">Microfone pronto.</div>
+            <textarea
+              id="voice-last"
+              rows="2"
+              readonly
+              placeholder="O que a máquina está ouvindo..."
+            ></textarea>
+          </section>
+
+          <section class="card full">
+            <div class="card-header">
+              <h2>Comando Manual</h2>
+              <p>Selecione os campos abaixo para adicionar o item.</p>
+            </div>
+            <div class="table-wrap">
+              <table class="manual-table">
+                <thead>
+                  <tr>
+                    <th>Setor</th>
+                    <th>Produto</th>
+                    <th>Marca</th>
+                    <th>Tipo</th>
+                    <th>Pallets</th>
+                    <th>Ação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <select id="manual-setor"></select>
+                    </td>
+                    <td>
+                      <select id="manual-produto"></select>
+                    </td>
+                    <td>
+                      <select id="manual-marca"></select>
+                    </td>
+                    <td>
+                      <select id="manual-tipo"></select>
+                    </td>
+                    <td>
+                      <select id="manual-pallets"></select>
+                    </td>
+                    <td>
+                      <button id="manual-add" class="primary">Adicionar</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div id="messages" class="msg-area"></div>
+          </section>
+
           <section class="card full">
             <div class="card-header">
               <h2>Itens Contados</h2>

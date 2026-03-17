@@ -170,11 +170,18 @@ const elements = {
   countTableDetailed: document.getElementById("count-table-detailed"),
   countTableSummary: document.getElementById("count-table-summary"),
   countLastUpdate: document.getElementById("count-last-update"),
+  voiceCard: document.getElementById("voice-card"),
   voiceBtn: document.getElementById("voice-btn"),
   voiceStatus: document.getElementById("voice-status"),
   voiceLast: document.getElementById("voice-last"),
   commandInput: document.getElementById("command-input"),
   processBtn: document.getElementById("process-btn"),
+  manualSetor: document.getElementById("manual-setor"),
+  manualProduto: document.getElementById("manual-produto"),
+  manualMarca: document.getElementById("manual-marca"),
+  manualTipo: document.getElementById("manual-tipo"),
+  manualPallets: document.getElementById("manual-pallets"),
+  manualAdd: document.getElementById("manual-add"),
   messages: document.getElementById("messages"),
   countTableBody: document.getElementById("count-table-body"),
   countTotalGeral: document.getElementById("count-total-geral"),
@@ -778,11 +785,18 @@ function renderCountTable() {
 function getCountRowsForSetor() {
   const source =
     state.countMode === "new" ? state.sessionRows : state.userRows;
-  if (!elements.setorSelect) return source;
+  if (!state.setor) return source;
   return source.filter((row) => row.setor === state.setor);
 }
 
-function updateAggregateRecord({ setor, produto, marca, tipo, caixas_pallet }) {
+function updateAggregateRecord({
+  setor,
+  produto,
+  marca,
+  tipo,
+  caixas_pallet,
+  palletsDelta = 1,
+}) {
   const found = state.publicRows.find(
     (row) =>
       row.setor === setor &&
@@ -791,7 +805,7 @@ function updateAggregateRecord({ setor, produto, marca, tipo, caixas_pallet }) {
       row.tipo === tipo
   );
   if (found) {
-    found.pallets += 1;
+    found.pallets += palletsDelta;
     found.total_caixas = found.pallets * found.caixas_pallet;
   } else {
     state.publicRows.push({
@@ -800,8 +814,8 @@ function updateAggregateRecord({ setor, produto, marca, tipo, caixas_pallet }) {
       marca,
       tipo,
       caixas_pallet,
-      pallets: 1,
-      total_caixas: caixas_pallet,
+      pallets: palletsDelta,
+      total_caixas: caixas_pallet * palletsDelta,
     });
   }
 }
@@ -852,7 +866,14 @@ async function loadUserRecords(options = {}) {
   return { data: state.userRows, error: null };
 }
 
-async function upsertRecord({ setor, produto, marca, tipo, caixas_pallet }) {
+async function upsertRecord({
+  setor,
+  produto,
+  marca,
+  tipo,
+  caixas_pallet,
+  palletsDelta = 1,
+}) {
   if (!state.user) return;
   const { data: existing, error: selectError } = await supabaseClient
     .from(TABLE_NAME)
@@ -870,7 +891,7 @@ async function upsertRecord({ setor, produto, marca, tipo, caixas_pallet }) {
   }
 
   if (existing) {
-    const newPallets = existing.pallets + 1;
+    const newPallets = existing.pallets + palletsDelta;
     const newTotal = newPallets * existing.caixas_pallet;
     const { error } = await supabaseClient
       .from(TABLE_NAME)
@@ -891,8 +912,8 @@ async function upsertRecord({ setor, produto, marca, tipo, caixas_pallet }) {
       marca,
       tipo,
       caixas_pallet,
-      pallets: 1,
-      total_caixas: caixas_pallet,
+      pallets: palletsDelta,
+      total_caixas: caixas_pallet * palletsDelta,
     });
 
     if (error) {
@@ -1050,19 +1071,22 @@ async function processCommand(rawText) {
 
 function setupVoice() {
   if (PAGE_MODE !== "edit") return;
-  if (!elements.voiceBtn || !elements.voiceStatus || !elements.voiceLast) return;
+  if (!elements.voiceBtn) return;
   const SpeechRecognition =
     window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
-    elements.voiceStatus.textContent =
-      "Navegador nao suporta reconhecimento de voz. Use Chrome ou Edge.";
+    if (elements.voiceStatus) {
+      elements.voiceStatus.textContent =
+        "Navegador nao suporta reconhecimento de voz. Use Chrome ou Edge.";
+    }
+    elements.voiceBtn.textContent = "Sem suporte";
     elements.voiceBtn.disabled = true;
     return;
   }
 
   const recognition = new SpeechRecognition();
   recognition.lang = "pt-BR";
-  recognition.interimResults = false;
+  recognition.interimResults = true;
   recognition.maxAlternatives = 1;
 
   let listening = false;
@@ -1077,27 +1101,62 @@ function setupVoice() {
 
   recognition.onstart = () => {
     listening = true;
-    elements.voiceStatus.textContent = "Ouvindo...";
+    if (elements.voiceStatus) {
+      elements.voiceStatus.textContent = "Ouvindo...";
+    }
+    if (elements.voiceLast) {
+      elements.voiceLast.value = "";
+    }
     elements.voiceBtn.textContent = "Parar";
+    if (elements.voiceCard) {
+      elements.voiceCard.classList.add("listening");
+    }
   };
 
   recognition.onend = () => {
     listening = false;
-    elements.voiceStatus.textContent = "Parado.";
+    if (elements.voiceStatus) {
+      elements.voiceStatus.textContent = "Parado.";
+    }
     elements.voiceBtn.textContent = "Iniciar escuta";
+    if (elements.voiceCard) {
+      elements.voiceCard.classList.remove("listening");
+    }
   };
 
   recognition.onerror = (event) => {
-    elements.voiceStatus.textContent = `Erro: ${event.error}`;
+    if (elements.voiceStatus) {
+      elements.voiceStatus.textContent = `Erro: ${event.error}`;
+    }
+    if (elements.voiceCard) {
+      elements.voiceCard.classList.remove("listening");
+    }
   };
 
   recognition.onresult = (event) => {
-    const transcript = event.results[0][0].transcript;
-    elements.voiceLast.value = transcript;
-    if (elements.commandInput) {
-      elements.commandInput.value = transcript;
+    let interimTranscript = "";
+    let finalTranscript = "";
+
+    for (let i = event.resultIndex; i < event.results.length; i += 1) {
+      const result = event.results[i];
+      const text = result[0]?.transcript || "";
+      if (result.isFinal) {
+        finalTranscript += text;
+      } else {
+        interimTranscript += text;
+      }
     }
-    processCommand(transcript);
+
+    const displayText = (finalTranscript || interimTranscript).trim();
+    if (elements.voiceLast) {
+      elements.voiceLast.value = displayText;
+    }
+    if (elements.commandInput) {
+      elements.commandInput.value = displayText;
+    }
+    if (finalTranscript.trim()) {
+      processCommand(finalTranscript.trim());
+    }
   };
 }
 
@@ -1272,6 +1331,7 @@ function updateSessionAggregateRecord({
   marca,
   tipo,
   caixas_pallet,
+  palletsDelta = 1,
 }) {
   const found = state.sessionRows.find(
     (row) =>
@@ -1281,7 +1341,7 @@ function updateSessionAggregateRecord({
       row.tipo === tipo
   );
   if (found) {
-    found.pallets += 1;
+    found.pallets += palletsDelta;
     found.total_caixas = found.pallets * found.caixas_pallet;
   } else {
     state.sessionRows.push({
@@ -1291,8 +1351,8 @@ function updateSessionAggregateRecord({
       marca,
       tipo,
       caixas_pallet,
-      pallets: 1,
-      total_caixas: caixas_pallet,
+      pallets: palletsDelta,
+      total_caixas: caixas_pallet * palletsDelta,
     });
   }
 }
@@ -1837,6 +1897,49 @@ function setSelectOptions(select, options, currentValue) {
   select.value = currentValue || "";
 }
 
+function setSelectOptionsWithPlaceholder(
+  select,
+  options,
+  currentValue,
+  placeholder
+) {
+  if (!select) return;
+  select.innerHTML = "";
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = placeholder || "Selecione";
+  select.appendChild(empty);
+  options.forEach((optionValue) => {
+    const option = document.createElement("option");
+    option.value = optionValue;
+    option.textContent = optionValue;
+    select.appendChild(option);
+  });
+  select.value = currentValue || "";
+}
+
+function setNumberOptions(select, min, max, currentValue, placeholder) {
+  if (!select) return;
+  select.innerHTML = "";
+  if (placeholder) {
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = placeholder;
+    select.appendChild(empty);
+  }
+  for (let value = min; value <= max; value += 1) {
+    const option = document.createElement("option");
+    option.value = String(value);
+    option.textContent = String(value);
+    select.appendChild(option);
+  }
+  if (currentValue !== undefined && currentValue !== null && currentValue !== "") {
+    select.value = String(currentValue);
+  } else if (placeholder) {
+    select.value = "";
+  }
+}
+
 function listProductsBySetor(setor) {
   const products = new Set();
   if (setor) {
@@ -1863,6 +1966,146 @@ function listBrands(setor, produto) {
     }
   });
   return Array.from(brands).sort();
+}
+
+function initManualForm() {
+  if (
+    !elements.manualSetor ||
+    !elements.manualProduto ||
+    !elements.manualMarca ||
+    !elements.manualTipo ||
+    !elements.manualPallets
+  ) {
+    return;
+  }
+
+  const setores = Object.keys(CONFIG_GERAL).sort();
+  setSelectOptionsWithPlaceholder(
+    elements.manualSetor,
+    setores,
+    state.setor || "",
+    "Selecione"
+  );
+  setSelectOptionsWithPlaceholder(
+    elements.manualProduto,
+    listProductsBySetor(elements.manualSetor.value),
+    "",
+    "Selecione"
+  );
+  setSelectOptionsWithPlaceholder(
+    elements.manualMarca,
+    listBrands(elements.manualSetor.value, elements.manualProduto.value),
+    "",
+    "Selecione"
+  );
+  setNumberOptions(elements.manualTipo, 1, 20, "", "Selecione");
+  setNumberOptions(elements.manualPallets, 1, 20, 1);
+}
+
+function updateManualDependencies() {
+  if (!elements.manualSetor || !elements.manualProduto || !elements.manualMarca) {
+    return;
+  }
+  const setor = elements.manualSetor.value;
+  const produtoAtual = elements.manualProduto.value;
+  const marcaAtual = elements.manualMarca.value;
+
+  setSelectOptionsWithPlaceholder(
+    elements.manualProduto,
+    listProductsBySetor(setor),
+    produtoAtual,
+    "Selecione"
+  );
+  setSelectOptionsWithPlaceholder(
+    elements.manualMarca,
+    listBrands(setor, elements.manualProduto.value),
+    marcaAtual,
+    "Selecione"
+  );
+}
+
+async function addManualItem() {
+  if (
+    !elements.manualSetor ||
+    !elements.manualProduto ||
+    !elements.manualMarca ||
+    !elements.manualTipo
+  ) {
+    return;
+  }
+
+  const setor = elements.manualSetor.value;
+  const produto = elements.manualProduto.value;
+  const marca = elements.manualMarca.value;
+  const tipo = Number.parseInt(elements.manualTipo.value, 10);
+  const pallets = Number.parseInt(elements.manualPallets?.value, 10) || 1;
+
+  if (!setor || !produto || !marca || Number.isNaN(tipo)) {
+    pushMessage("warn", "Preencha setor, produto, marca e tipo.");
+    return;
+  }
+
+  if (pallets <= 0) {
+    pushMessage("warn", "Informe uma quantidade de pallets válida.");
+    return;
+  }
+
+  const regra = CONFIG_GERAL[setor]?.[produto]?.[marca];
+  if (!regra) {
+    pushMessage("error", "Combinação de setor/produto/marca inválida.");
+    return;
+  }
+
+  const caixasPallet = regra(tipo);
+  const palletsDelta = pallets;
+
+  state.setor = setor;
+  state.produto = produto;
+  state.marca = marca;
+  if (elements.setorSelect) {
+    elements.setorSelect.value = setor;
+  }
+  renderContext();
+
+  if (state.countMode === "new") {
+    updateSessionAggregateRecord({
+      setor,
+      produto,
+      marca,
+      tipo,
+      caixas_pallet: caixasPallet,
+      palletsDelta,
+    });
+    renderCountTable();
+    pushMessage(
+      "success",
+      `Registrado (nova contagem): ${produto} ${marca} Tipo ${tipo}`
+    );
+    return;
+  }
+
+  updateAggregateRecord({
+    setor,
+    produto,
+    marca,
+    tipo,
+    caixas_pallet: caixasPallet,
+    palletsDelta,
+  });
+  renderPublicTable();
+  renderCountTable();
+  pushMessage("success", `Registrado: ${produto} ${marca} Tipo ${tipo}`);
+
+  await upsertRecord({
+    setor,
+    produto,
+    marca,
+    tipo,
+    caixas_pallet: caixasPallet,
+    palletsDelta,
+  });
+  await loadUserRecords();
+  await loadPublicRecords();
 }
 
 function buildFilterOptions() {
@@ -2157,6 +2400,28 @@ function setupEvents() {
     });
   }
 
+  if (elements.manualSetor) {
+    elements.manualSetor.addEventListener("change", () => {
+      if (elements.manualSetor.value) {
+        state.setor = elements.manualSetor.value;
+        renderCountTable();
+      }
+      updateManualDependencies();
+    });
+  }
+
+  if (elements.manualProduto) {
+    elements.manualProduto.addEventListener("change", () => {
+      updateManualDependencies();
+    });
+  }
+
+  if (elements.manualAdd) {
+    elements.manualAdd.addEventListener("click", () => {
+      addManualItem();
+    });
+  }
+
   if (elements.publicExportToggle) {
     elements.publicExportToggle.addEventListener("click", () => {
       openExportSheet("public");
@@ -2367,6 +2632,7 @@ function initSetorSelects() {
 
 
 initSetorSelects();
+initManualForm();
 buildFilterOptions();
 renderContext();
 renderPublicTable();

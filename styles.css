@@ -320,9 +320,151 @@ button:hover {
   margin-top: 16px;
 }
 
+.voice-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  gap: 12px;
+  text-align: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.voice-card .voice-action {
+  position: relative;
+  z-index: 2;
+  padding: 12px 22px;
+  font-size: 16px;
+}
+
+.voice-visual {
+  position: absolute;
+  inset: -30%;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.voice-visual::after {
+  content: "";
+  position: absolute;
+  width: 360px;
+  height: 360px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(125, 211, 252, 0.12),
+    transparent 65%
+  );
+  filter: blur(6px);
+  animation: siri-ring 2.6s ease-in-out infinite;
+}
+
+.voice-visual span {
+  position: absolute;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  filter: blur(22px);
+  mix-blend-mode: screen;
+  animation: siri-blob 1.8s ease-in-out infinite;
+  transform: translate(0, 0) scale(0.95);
+  opacity: 0.95;
+}
+
+.voice-visual span:nth-child(1) {
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.9), transparent 60%);
+  --x: -20px;
+  --y: -12px;
+  --s: 1.1;
+  animation-delay: 0s;
+}
+
+.voice-visual span:nth-child(2) {
+  background: radial-gradient(circle, rgba(129, 140, 248, 0.85), transparent 62%);
+  --x: 18px;
+  --y: -8px;
+  --s: 1.05;
+  animation-delay: 0.4s;
+}
+
+.voice-visual span:nth-child(3) {
+  background: radial-gradient(circle, rgba(34, 197, 94, 0.75), transparent 60%);
+  --x: -8px;
+  --y: 18px;
+  --s: 1.12;
+  animation-delay: 0.8s;
+}
+
+.voice-visual span:nth-child(4) {
+  background: radial-gradient(circle, rgba(248, 113, 113, 0.65), transparent 60%);
+  --x: 16px;
+  --y: 16px;
+  --s: 1;
+  animation-delay: 1.2s;
+}
+
+.voice-card.listening {
+  transform: translateY(-2px);
+  box-shadow: 0 26px 60px rgba(15, 23, 42, 0.18);
+  background: radial-gradient(circle at center, rgba(15, 23, 42, 0.04), #ffffff);
+}
+
+.voice-card.listening .voice-visual {
+  opacity: 1;
+}
+
+.voice-card.listening .voice-action {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+@keyframes siri-blob {
+  0% {
+    transform: translate(calc(var(--x) * -1), calc(var(--y) * -1)) scale(0.9);
+  }
+  50% {
+    transform: translate(var(--x), var(--y)) scale(var(--s));
+  }
+  100% {
+    transform: translate(calc(var(--x) * -1), calc(var(--y) * -1)) scale(0.9);
+  }
+}
+
+@keyframes siri-ring {
+  0% {
+    transform: scale(0.92);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(0.92);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-visual span,
+  .voice-visual::after {
+    animation: none;
+  }
+}
+
 .voice-status {
   font-size: 14px;
   color: #6b7280;
+  position: relative;
+  z-index: 2;
+}
+
+#voice-last {
+  position: relative;
+  z-index: 2;
+  width: min(360px, 90%);
+  background: rgba(255, 255, 255, 0.85);
 }
 
 .command {
@@ -345,6 +487,14 @@ table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+}
+
+table.manual-table select {
+  min-width: 140px;
+}
+
+table.manual-table td:last-child {
+  white-space: nowrap;
 }
 
 th,
