@@ -326,117 +326,48 @@ function formatTipoLabelValue(produto, tipo) {
   return tipo;
 }
 
-function jaroSimilarity(a, b) {
-  const s = a || "";
-  const t = b || "";
-  if (s === t) return 1;
-  const sLen = s.length;
-  const tLen = t.length;
-  if (!sLen || !tLen) return 0;
-
-  const matchDistance = Math.floor(Math.max(sLen, tLen) / 2) - 1;
-  const sMatches = new Array(sLen).fill(false);
-  const tMatches = new Array(tLen).fill(false);
-  let matches = 0;
-
-  for (let i = 0; i < sLen; i += 1) {
-    const start = Math.max(0, i - matchDistance);
-    const end = Math.min(i + matchDistance + 1, tLen);
-    for (let j = start; j < end; j += 1) {
-      if (tMatches[j]) continue;
-      if (s[i] !== t[j]) continue;
-      sMatches[i] = true;
-      tMatches[j] = true;
-      matches += 1;
-      break;
-    }
-  }
-
-  if (!matches) return 0;
-
-  let transpositions = 0;
-  let k = 0;
-  for (let i = 0; i < sLen; i += 1) {
-    if (!sMatches[i]) continue;
-    while (!tMatches[k]) k += 1;
-    if (s[i] !== t[k]) transpositions += 1;
-    k += 1;
-  }
-  transpositions /= 2;
-
-  return (
-    (matches / sLen +
-      matches / tLen +
-      (matches - transpositions) / matches) /
-    3
-  );
-}
-
-function jaroWinkler(a, b) {
-  const jaro = jaroSimilarity(a, b);
-  const prefixLimit = 4;
-  let prefix = 0;
-  for (let i = 0; i < Math.min(prefixLimit, a.length, b.length); i += 1) {
-    if (a[i] === b[i]) {
-      prefix += 1;
-    } else {
-      break;
-    }
-  }
-  return jaro + prefix * 0.1 * (1 - jaro);
-}
-
-function minSimilarityForLength(length) {
-  if (length <= 4) return 0.76;
-  if (length <= 7) return 0.7;
-  if (length <= 12) return 0.66;
-  return 0.62;
-}
-
-function findClosestInText(text, map) {
+function tokenizeText(text) {
   const normalized = normalizeText(text);
-  if (!normalized) return null;
-  const tokens = normalized.split(" ").filter(Boolean);
-  if (!tokens.length) return null;
+  if (!normalized) return [];
+  return normalized.split(" ").filter(Boolean);
+}
 
-  const keys = Object.keys(map || {});
-  let bestScore = 0;
-  let bestValue = null;
-  let bestKeyLength = 0;
-
-  keys.forEach((key) => {
+function buildNormalizedMap(values) {
+  const map = {};
+  (values || []).forEach((value) => {
+    const key = normalizeText(value);
     if (!key) return;
-    const keyTokens = key.split(" ").filter(Boolean);
-    const size = keyTokens.length || 1;
-    const keyStr = keyTokens.join("");
-    if (!keyStr) return;
-
-    const compareCandidate = (candidateTokens) => {
-      if (!candidateTokens.length) return;
-      if (candidateTokens.some((token) => /\d/.test(token))) return;
-      const candidate = candidateTokens.join("");
-      if (!candidate.length || !keyStr.length) return;
-      const score = jaroWinkler(candidate, keyStr);
-      if (score > bestScore || (score === bestScore && keyStr.length > bestKeyLength)) {
-        bestScore = score;
-        bestValue = map[key];
-        bestKeyLength = keyStr.length;
-      }
-    };
-
-    if (tokens.length < size) {
-      compareCandidate(tokens);
-      return;
-    }
-
-    for (let i = 0; i <= tokens.length - size; i += 1) {
-      compareCandidate(tokens.slice(i, i + size));
-    }
+    map[key] = value;
   });
+  return map;
+}
 
-  if (!bestValue) return null;
-  const threshold = minSimilarityForLength(bestKeyLength);
-  return bestScore >= threshold ? bestValue : null;
+function containsTokenSequence(tokens, sequence) {
+  if (!sequence.length || tokens.length < sequence.length) return false;
+  for (let i = 0; i <= tokens.length - sequence.length; i += 1) {
+    let match = true;
+    for (let j = 0; j < sequence.length; j += 1) {
+      if (tokens[i + j] !== sequence[j]) {
+        match = false;
+        break;
+      }
+    }
+    if (match) return true;
+  }
+  return false;
+}
+
+function findExactMatch(tokens, map) {
+  const entries = Object.entries(map || {}).sort((a, b) => b[0].length - a[0].length);
+  for (const [key, value] of entries) {
+    if (!key) continue;
+    const seq = key.split(" ").filter(Boolean);
+    if (!seq.length) continue;
+    if (containsTokenSequence(tokens, seq)) {
+      return value;
+    }
+  }
+  return null;
 }
 
 function toAuthEmail(value) {
@@ -454,16 +385,6 @@ function toAuthEmail(value) {
 function displayUserFromEmail(email) {
   if (!email) return "--";
   return email.split("@")[0] || email;
-}
-
-function findInText(text, map) {
-  const keys = Object.keys(map).sort((a, b) => b.length - a.length);
-  for (const key of keys) {
-    if (key && text.includes(key)) {
-      return map[key];
-    }
-  }
-  return null;
 }
 
 function extractNumbers(text) {
@@ -1770,25 +1691,21 @@ async function upsertRecord({
 }
 
 function buildMaps(setor) {
-  const products = CONFIG_GERAL[setor];
-  const productMap = {};
-  const brandMap = {};
-  const brandToProduct = {};
+  const products = CONFIG_GERAL[setor] || {};
+  const productMap = buildNormalizedMap(Object.keys(products));
+  return { products, productMap };
+}
 
-  Object.keys(products).forEach((product) => {
-    productMap[normalizeText(product)] = product;
-    Object.keys(products[product]).forEach((brand) => {
-      const nb = normalizeText(brand);
-      brandMap[nb] = brand;
-      if (brandToProduct[nb] && brandToProduct[nb] !== product) {
-        brandToProduct[nb] = null;
-      } else {
-        brandToProduct[nb] = product;
-      }
-    });
+function buildBrandMap(products, product) {
+  return buildNormalizedMap(Object.keys(products?.[product] || {}));
+}
+
+function buildAllBrandMap(products) {
+  const allBrands = [];
+  Object.keys(products || {}).forEach((product) => {
+    allBrands.push(...Object.keys(products[product] || {}));
   });
-
-  return { products, productMap, brandMap, brandToProduct };
+  return buildNormalizedMap(allBrands);
 }
 
 function formatTipoCounts(tipoCounts) {
@@ -1799,82 +1716,56 @@ function formatTipoCounts(tipoCounts) {
 }
 
 async function processCommand(rawText) {
-  const normInput = normalizeText(rawText);
-  if (!normInput) return;
+  const tokens = tokenizeText(rawText);
+  if (!tokens.length) return;
 
-  const sectorMap = {};
-  Object.keys(CONFIG_GERAL).forEach((sector) => {
-    sectorMap[normalizeText(sector)] = sector;
-  });
-
-  const sectorFound =
-    findInText(normInput, sectorMap) ||
-    findClosestInText(normInput, sectorMap);
+  const sectorMap = buildNormalizedMap(Object.keys(CONFIG_GERAL));
+  const sectorFound = findExactMatch(tokens, sectorMap);
   if (sectorFound) {
+    const changed = sectorFound !== state.setor;
     state.setor = sectorFound;
-    state.produto = null;
-    state.marca = null;
-    state.tipo = null;
+    if (changed) {
+      state.produto = null;
+      state.marca = null;
+      state.tipo = null;
+    }
     pushMessage("info", `Setor fixado: ${sectorFound}`);
   }
 
-  const { products, productMap, brandMap, brandToProduct } = buildMaps(
-    state.setor
-  );
-
-  const productFound =
-    findInText(normInput, productMap) ||
-    findClosestInText(normInput, productMap);
-  const brandFound =
-    findInText(normInput, brandMap) || findClosestInText(normInput, brandMap);
-
-  const brandMatchesCurrent =
-    state.produto && brandFound && products[state.produto]?.[brandFound];
-
-  if (brandMatchesCurrent && isNoTipoProduct(state.produto)) {
-    state.marca = brandFound;
-    pushMessage("info", `Marca fixada: ${brandFound}`);
-  } else if (productFound) {
+  const { products, productMap } = buildMaps(state.setor);
+  const productFound = findExactMatch(tokens, productMap);
+  if (productFound) {
+    const changed = productFound !== state.produto;
     state.produto = productFound;
-    state.tipo = null;
-    pushMessage("info", `Produto fixado: ${productFound}`);
-    if (brandFound) {
-      if (brandFound in products[productFound]) {
-        state.marca = brandFound;
-        pushMessage("info", `Marca fixada: ${brandFound}`);
-      } else {
-        pushMessage(
-          "warn",
-          `Marca '${brandFound}' n?o pertence ao produto '${productFound}'.`
-        );
-      }
-    } else {
+    if (changed) {
       state.marca = null;
+      state.tipo = null;
     }
-  } else if (brandFound) {
-    if (state.produto && brandFound in products[state.produto]) {
+    pushMessage("info", `Produto fixado: ${productFound}`);
+  }
+
+  let brandFound = null;
+  if (state.produto) {
+    const brandMap = buildBrandMap(products, state.produto);
+    brandFound = findExactMatch(tokens, brandMap);
+    if (brandFound) {
+      const changed = brandFound !== state.marca;
       state.marca = brandFound;
-      pushMessage("info", `Marca fixada: ${brandFound}`);
-    } else {
-      const inferredProduct = brandToProduct[normalizeText(brandFound)];
-      if (inferredProduct) {
-        state.produto = inferredProduct;
+      if (changed) {
         state.tipo = null;
-        state.marca = brandFound;
-        pushMessage("info", `Produto fixado: ${inferredProduct}`);
-        pushMessage("info", `Marca fixada: ${brandFound}`);
-      } else {
-        pushMessage(
-          "warn",
-          "Marca aparece em mais de um produto. Diga o produto junto."
-        );
       }
+      pushMessage("info", `Marca fixada: ${brandFound}`);
+    }
+  } else {
+    const anyBrand = findExactMatch(tokens, buildAllBrandMap(products));
+    if (anyBrand) {
+      pushMessage("warn", "Diga o produto antes da marca.");
     }
   }
 
-  const tipos = extractNumbers(normInput);
+  const tipos = extractNumbers(rawText);
   const noTipo = isNoTipoProduct(state.produto);
-  const addCommand = isAddCommand(normInput);
+  const addCommand = isAddCommand(rawText);
 
   if (addCommand && !tipos.length) {
     pushMessage("warn", "Diga a quantidade para adicionar.");
@@ -1914,9 +1805,9 @@ async function processCommand(rawText) {
     const quantity = numericValues[numericValues.length - 1];
     let tipoParaAdicionar = noTipo ? NO_TIPO_VALUE : state.tipo;
 
-    if (!noTipo && (productFound || brandFound) && numericValues.length >= 2) {
+    if (!noTipo && numericValues.length >= 2) {
       const candidateTipo = numericValues[0];
-      if (Number.isFinite(candidateTipo)) {
+      if (Number.isFinite(candidateTipo) && candidateTipo <= 30) {
         tipoParaAdicionar = candidateTipo;
         state.tipo = candidateTipo;
       }
