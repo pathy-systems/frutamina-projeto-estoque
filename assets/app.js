@@ -1,6 +1,7 @@
 const SUPABASE_URL = "https://ldkazwnzfppcsoolydkp.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_14RDXtWzeDV-nzAHfGrNCw_lB4XsUSn";
 const TABLE_NAME = "estoque_registros";
+const SNAPSHOT_TABLE = "estoque_snapshots";
 const SESSION_MAX_MS = 60 * 60 * 1000;
 const SUPABASE_TIMEOUT_MS = 45000;
 
@@ -126,6 +127,9 @@ const state = {
   countViewMode: "detailed",
   lastUpdatePublicAt: null,
   lastUpdateCountAt: null,
+  lastUpdatePublicBy: null,
+  lastUpdateCountBy: null,
+  snapshotRows: [],
   publicRows: [],
   rawPublicRows: [],
   user: null,
@@ -502,38 +506,85 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+function storeUserLabel(userId, email) {
+  if (!userId || !email) return;
+  const label = displayUserFromEmail(email);
+  if (!label) return;
+  localStorage.setItem(`cd_user_label_${userId}`, label);
+}
+
+function getStoredUserLabel(userId) {
+  if (!userId) return "";
+  return localStorage.getItem(`cd_user_label_${userId}`) || "";
+}
+
+function formatUserLabel(userId) {
+  if (!userId) return "--";
+  if (state.user?.id && userId === state.user.id) {
+    return displayUserFromEmail(state.user.email);
+  }
+  const stored = getStoredUserLabel(userId);
+  if (stored) return stored;
+  const raw = String(userId);
+  const short = raw.includes("-") ? raw.split("-")[0] : raw.slice(0, 6);
+  return `usuario ${short}`;
+}
+
+function formatLastUpdateText(dateValue, userId) {
+  const dateText = formatDateTime(dateValue);
+  const userText = formatUserLabel(userId);
+  if (dateText === "--" && userText === "--") return "--";
+  if (userText === "--") return dateText;
+  if (dateText === "--") return userText;
+  return `${dateText} | ${userText}`;
+}
+
 function renderLastUpdate() {
   if (elements.publicLastUpdate) {
-    elements.publicLastUpdate.textContent = formatDateTime(
-      state.lastUpdatePublicAt
+    elements.publicLastUpdate.textContent = formatLastUpdateText(
+      state.lastUpdatePublicAt,
+      state.lastUpdatePublicBy
     );
   }
   if (elements.countLastUpdate) {
-    elements.countLastUpdate.textContent = formatDateTime(
-      state.lastUpdateCountAt
+    elements.countLastUpdate.textContent = formatLastUpdateText(
+      state.lastUpdateCountAt,
+      state.lastUpdateCountBy
     );
   }
 }
 
 function updateLastUpdateFromRows(rows, target) {
-  const timestamps = (rows || [])
-    .map((row) => row?.updated_at)
-    .filter(Boolean)
-    .map((value) => new Date(value).getTime())
-    .filter((value) => Number.isFinite(value));
-  if (!timestamps.length) {
+  let latestRow = null;
+  let latestTimestamp = null;
+  (rows || []).forEach((row) => {
+    const updatedAt = row?.updated_at ? new Date(row.updated_at) : null;
+    if (!updatedAt || Number.isNaN(updatedAt.getTime())) return;
+    const ts = updatedAt.getTime();
+    if (latestTimestamp === null || ts > latestTimestamp) {
+      latestTimestamp = ts;
+      latestRow = row;
+    }
+  });
+
+  if (!latestRow || latestTimestamp === null) {
     if (target === "public") {
       state.lastUpdatePublicAt = null;
+      state.lastUpdatePublicBy = null;
     } else {
       state.lastUpdateCountAt = null;
+      state.lastUpdateCountBy = null;
     }
     renderLastUpdate();
     return;
   }
+
   if (target === "public") {
-    state.lastUpdatePublicAt = new Date(Math.max(...timestamps));
+    state.lastUpdatePublicAt = new Date(latestTimestamp);
+    state.lastUpdatePublicBy = latestRow?.user_id || null;
   } else {
-    state.lastUpdateCountAt = new Date(Math.max(...timestamps));
+    state.lastUpdateCountAt = new Date(latestTimestamp);
+    state.lastUpdateCountBy = latestRow?.user_id || null;
   }
   renderLastUpdate();
 }
@@ -922,6 +973,45 @@ function getRangeLabel(range) {
   return RANGE_PRESETS[key]?.label || "todo o periodo";
 }
 
+function buildRangeDates(range, rows) {
+  const key = normalizeRange(range);
+  const preset = RANGE_PRESETS[key];
+  const now = new Date();
+  const dates = [];
+
+  if (preset.unit === "hour") {
+    const end = endOfHour(now);
+    const start = new Date(end);
+    start.setHours(end.getHours() - (preset.size - 1));
+    for (let i = 0; i < preset.size; i += 1) {
+      const date = new Date(start);
+      date.setHours(start.getHours() + i);
+      dates.push(endOfHour(date));
+    }
+    return { dates, range: key };
+  }
+
+  const end = endOfDay(now);
+  let start = new Date(end);
+  if (preset.size) {
+    start.setDate(end.getDate() - (preset.size - 1));
+  } else {
+    const earliest = getEarliestDate(rows) || end;
+    start = endOfDay(earliest);
+  }
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    dates.push(endOfDay(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  if (!dates.length) {
+    dates.push(endOfDay(now));
+  }
+
+  return { dates, range: key };
+}
+
 function endOfDay(date) {
   const next = new Date(date);
   next.setHours(23, 59, 59, 999);
@@ -937,8 +1027,9 @@ function endOfHour(date) {
 function getEarliestDate(rows) {
   let earliest = null;
   (rows || []).forEach((row) => {
-    if (!row?.updated_at) return;
-    const date = new Date(row.updated_at);
+    const source = row?.created_at || row?.updated_at;
+    if (!source) return;
+    const date = new Date(source);
     if (Number.isNaN(date.getTime())) return;
     if (!earliest || date < earliest) earliest = date;
   });
@@ -946,39 +1037,7 @@ function getEarliestDate(rows) {
 }
 
 function buildTimeSeries(rows, range) {
-  const key = normalizeRange(range);
-  const preset = RANGE_PRESETS[key];
-  const now = new Date();
-  const dates = [];
-
-  if (preset.unit === "hour") {
-    const end = endOfHour(now);
-    const start = new Date(end);
-    start.setHours(end.getHours() - (preset.size - 1));
-    for (let i = 0; i < preset.size; i += 1) {
-      const date = new Date(start);
-      date.setHours(start.getHours() + i);
-      dates.push(endOfHour(date));
-    }
-  } else {
-    const end = endOfDay(now);
-    let start = new Date(end);
-    if (preset.size) {
-      start.setDate(end.getDate() - (preset.size - 1));
-    } else {
-      const earliest = getEarliestDate(rows) || end;
-      start = endOfDay(earliest);
-    }
-    const cursor = new Date(start);
-    while (cursor <= end) {
-      dates.push(endOfDay(cursor));
-      cursor.setDate(cursor.getDate() + 1);
-    }
-  }
-
-  if (!dates.length) {
-    dates.push(endOfDay(now));
-  }
+  const { dates, range: key } = buildRangeDates(range, rows);
 
   const values = dates.map((date) => {
     return (rows || []).reduce((sum, row) => {
@@ -989,6 +1048,34 @@ function buildTimeSeries(rows, range) {
       }
       return sum;
     }, 0);
+  });
+
+  return { dates, values, range: key };
+}
+
+function buildSnapshotSeries(rows, range) {
+  const { dates, range: key } = buildRangeDates(range, rows);
+  const snapshots = (rows || [])
+    .map((row) => {
+      const source = row?.created_at || row?.updated_at;
+      const date = source ? new Date(source) : null;
+      if (!date || Number.isNaN(date.getTime())) return null;
+      return {
+        date,
+        value: Number(row.total_caixas) || 0,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.date - b.date);
+
+  let cursor = 0;
+  let lastValue = 0;
+  const values = dates.map((date) => {
+    while (cursor < snapshots.length && snapshots[cursor].date <= date) {
+      lastValue = snapshots[cursor].value;
+      cursor += 1;
+    }
+    return lastValue;
   });
 
   return { dates, values, range: key };
@@ -1130,15 +1217,19 @@ function renderLineChart(canvas, series, options = {}) {
 }
 
 function buildDashboardSeries(range) {
-  const rows = state.rawPublicRows || [];
-  const total = buildTimeSeries(rows, range);
+  const snapshotRows = state.snapshotRows || [];
+  const useSnapshots = snapshotRows.length > 0;
+  const sourceRows = useSnapshots ? snapshotRows : state.rawPublicRows || [];
+  const total = useSnapshots
+    ? buildSnapshotSeries(sourceRows, range)
+    : buildTimeSeries(sourceRows, range);
   const outflowValues = buildOutflowSeries(total.values);
   const outflow = {
     dates: total.dates,
     values: outflowValues,
     range: total.range,
   };
-  return { range: total.range, total, outflow };
+  return { range: total.range, total, outflow, source: useSnapshots ? "snapshot" : "live" };
 }
 
 function renderDashboard(force = false) {
@@ -1481,11 +1572,64 @@ function updateAggregateRecord({
   }
 }
 
+function getTotalCaixas(rows) {
+  return (rows || []).reduce((sum, row) => {
+    const value =
+      Number(row.total_caixas) ||
+      (Number(row.pallets) || 0) * (Number(row.caixas_pallet) || 0);
+    return sum + (Number.isFinite(value) ? value : 0);
+  }, 0);
+}
+
+async function loadSnapshotRecords(options = {}) {
+  const { showError = false } = options;
+  const { data, error } = await supabaseClient
+    .from(SNAPSHOT_TABLE)
+    .select("id, user_id, total_caixas, created_at")
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    if (showError) {
+      pushMessage("error", `Erro ao carregar historico: ${error.message}`);
+    } else {
+      console.warn("Erro ao carregar historico:", error.message);
+    }
+    state.snapshotRows = [];
+    return { data: null, error };
+  }
+
+  state.snapshotRows = data || [];
+  renderDashboard();
+  return { data: state.snapshotRows, error: null };
+}
+
+async function saveSnapshotTotal() {
+  if (!state.user) {
+    pushMessage("warn", "Faca login para salvar o historico.");
+    return false;
+  }
+  let total = getTotalCaixas(state.publicRows);
+  if (!state.publicRows.length && state.userRows.length) {
+    total = getTotalCaixas(state.userRows);
+  }
+  const { error } = await supabaseClient.from(SNAPSHOT_TABLE).insert({
+    user_id: state.user.id,
+    total_caixas: total,
+  });
+  if (error) {
+    pushMessage("error", `Erro ao salvar historico: ${error.message}`);
+    return false;
+  }
+  pushMessage("success", "Historico salvo com sucesso.");
+  await loadSnapshotRecords();
+  return true;
+}
+
 async function loadPublicRecords() {
   const { data, error } = await supabaseClient
     .from(TABLE_NAME)
     .select(
-      "setor, produto, marca, tipo, caixas_pallet, pallets, total_caixas, updated_at"
+      "setor, produto, marca, tipo, caixas_pallet, pallets, total_caixas, updated_at, user_id"
     );
 
   if (error) {
@@ -3405,6 +3549,19 @@ function setupEvents() {
         `Deseja apagar todas as contagens do setor ${state.setor}?`
       );
       if (!confirmClear) return;
+
+      const shouldSave = window.confirm(
+        "Salvar o estoque atual no historico antes de apagar?\nOK = salvar e apagar\nCancelar = apagar sem salvar"
+      );
+      if (shouldSave) {
+        const saved = await saveSnapshotTotal();
+        if (!saved) {
+          const proceed = window.confirm(
+            "Falha ao salvar o historico. Deseja apagar mesmo assim?"
+          );
+          if (!proceed) return;
+        }
+      }
       const { error } = await supabaseClient
         .from(TABLE_NAME)
         .delete()
@@ -3415,7 +3572,12 @@ function setupEvents() {
         return;
       }
       await loadPublicRecords();
-      pushMessage("success", "Contagem limpa para o setor atual.");
+      pushMessage(
+        "success",
+        shouldSave
+          ? "Contagem limpa e historico salvo."
+          : "Contagem limpa para o setor atual."
+      );
     });
   }
 
@@ -3437,14 +3599,15 @@ function setupEvents() {
 
 async function handleAuthState(event, session) {
   state.user = session?.user ?? null;
-  if (state.user) {
-    if (event === "SIGNED_IN") {
-      setLoginTimestamp();
-    } else if (!getLoginTimestamp()) {
-      setLoginTimestamp();
-    }
-    if (isSessionExpired()) {
-      await supabaseClient.auth.signOut();
+    if (state.user) {
+      if (event === "SIGNED_IN") {
+        setLoginTimestamp();
+      } else if (!getLoginTimestamp()) {
+        setLoginTimestamp();
+      }
+      storeUserLabel(state.user.id, state.user.email);
+      if (isSessionExpired()) {
+        await supabaseClient.auth.signOut();
       clearLoginTimestamp();
       setAuthMessage("info", "Sessão expirada. Faça login novamente.");
       return;
@@ -3535,6 +3698,9 @@ setupEvents();
 setupDashboard();
 setupAuth();
 loadPublicRecords();
+if (PAGE_MODE === "dashboard") {
+  loadSnapshotRecords();
+}
 setInterval(enforceSessionLimit, 60 * 1000);
 
 window.addEventListener("resize", () => {
