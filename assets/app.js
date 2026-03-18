@@ -23,7 +23,7 @@ const CONFIG_GERAL = {
       BAHIA: (t) => 66,
   
     },
-    MELANCIA: {
+    "MELANCIA (CHAO)": {
       SAMBA: (t) => (t >= 4 && t <= 7 ? 66 : 65),
       MOSSORO: (t) => 60,
     },
@@ -51,13 +51,13 @@ const CONFIG_GERAL = {
       CEPI: (t) => (t === 4 ? 77 : 84),
       GAIA: (t) => (t >= 6 && t <= 7 ? 66 : 65),
     },
-    MELANCIA: {
+    "MELANCIA (ITAUEIRA)": {
       MAGALI: (t) => (t >= 5 && t <= 6 ? 77 : 84),
       "MAGALI 14Kg": (t) => 66,
       CEPI: (t) => (t >= 5 && t <= 6 ? 77 : 84),
       "CEPI 14Kg": (t) => 66,
     },
-    DINO: {
+    MATISSE: {
       "MATISSE REI": (t) => (t >= 5 && t <= 6 ? 77 : 84),
       "MATISSE CEPI": (t) => (t >= 5 && t <= 6 ? 77 : 84),
       CEPI: (t) => (t >= 5 && t <= 6 ? 77 : 84),
