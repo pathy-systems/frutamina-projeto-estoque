@@ -178,17 +178,16 @@
       <section id="auth-panel" class="card hidden">
         <div class="card-header">
           <h2>Acesso</h2>
-          <p>Entre com seu usu?rio do CD para come?ar a contagem.</p>
+          <p>Entre com seu usuário do CD para começar a contagem.</p>
         </div>
         <div class="form-grid">
-          <label for="email">Usuario ou numero</label>
+          <label for="email">Usuário ou número</label>
           <input id="email" type="text" placeholder="Ex: 1234 ou JOAO" />
           <label for="password">Senha</label>
-          <input id="password" type="password" placeholder="????????" />
+          <input id="password" type="password" placeholder="*******" />
         </div>
         <div class="actions">
           <button id="login-btn" class="primary">Entrar</button>
-          <button id="signup-btn" class="ghost">Criar conta</button>
         </div>
         <div id="auth-msg" class="msg-area"></div>
       </section>
@@ -198,7 +197,7 @@
           <section class="card">
             <div class="card-header">
               <h2>Contexto Travado</h2>
-              <p>Fale setor ? marca/produto ? n?mero.</p>
+              <p>Fale setor, marca/produto ou número.</p>
             </div>
             <div class="context">
               <div class="context-item">
@@ -233,7 +232,7 @@
                 id="voice-last"
                 rows="2"
                 readonly
-                placeholder="?ltimo comando reconhecido..."
+                placeholder="Último comando reconhecido..."
               ></textarea>
             </div>
           </section>
@@ -241,13 +240,13 @@
           <section class="card full">
             <div class="card-header">
               <h2>Comando Manual</h2>
-              <p>Tamb?m funciona digitando (ex: ?CH?O?, ?ANGEL?, ?4?).</p>
+              <p>Também funciona digitando (ex: CHÃO, ANGEL, 4).</p>
             </div>
             <div class="command">
               <input
                 id="command-input"
                 type="text"
-                placeholder="Diga o setor, produto/marca ou apenas o n?mero"
+                placeholder="Diga o setor, produto/marca ou apenas o número"
               />
               <button id="process-btn" class="primary">Processar</button>
             </div>
@@ -257,7 +256,7 @@
           <section class="card full">
             <div class="card-header">
               <h2>Itens Contados</h2>
-              <p>Visualiza??o por setor atual.</p>
+              <p>Visualização por setor atual.</p>
             </div>
             <div class="table-wrap">
               <table>
@@ -278,8 +277,8 @@
               <div class="total">
                 Total geral do setor: <strong id="count-total-geral">0</strong>
               </div>
-              <div class="actions">
-                <button id="count-export-btn" class="ghost">Exportar CSV</button>
+              <div class="actions table-tools">
+                <button id="count-export-toggle" class="ghost">Exportar</button>
                 <button id="count-clear-btn" class="danger">Limpar contagem</button>
               </div>
             </div>
@@ -287,7 +286,6 @@
         </div>
       </section>
     </div>
-
+    <script src="assets/app.js?v=20260318-9"></script>
   </body>
-  <script src="assets/app.js?v=20260318-7"></script>
 </html>

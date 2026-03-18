@@ -6,7 +6,7 @@ const SESSION_MAX_MS = 60 * 60 * 1000;
 const SUPABASE_TIMEOUT_MS = 45000;
 
 const CONFIG_GERAL = {
-  CHÃƒO: {
+  CHAO: {
     AMARELO: {
       ANGEL: (t) => (t >= 4 && t <= 9 ? 72 : 65),
       BAHIA: (t) => 66,
@@ -70,7 +70,7 @@ const CONFIG_GERAL = {
       "GALIA REI": (t) => (t >= 5 && t <= 6 ? 77 : 84),
       "GALIA CEPI": (t) => (t >= 5 && t <= 6 ? 77 : 84),
     },
-    PIMENTÃƒO: {
+    PIMENTAO: {
       AMARELO: (t) => 88,
       VERMELHO: (t) => 88,
       LARANJA: (t) => 88,
@@ -200,7 +200,6 @@ const elements = {
   countPanel: document.getElementById("count-panel"),
   dashboardPanel: document.getElementById("dashboard-panel"),
   loginBtn: document.getElementById("login-btn"),
-  signupBtn: document.getElementById("signup-btn"),
   email: document.getElementById("email"),
   password: document.getElementById("password"),
   authMsg: document.getElementById("auth-msg"),
@@ -284,7 +283,7 @@ function normalizeText(text) {
   const base = (text || "")
     .toUpperCase()
     .normalize("NFD")
-    .replace(/[Ì€-Í¯]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^A-Z0-9 ]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -651,7 +650,7 @@ async function enforceSessionLimit() {
   if (isSessionExpired()) {
     await supabaseClient.auth.signOut();
     clearLoginTimestamp();
-    setAuthMessage("info", "SessÃ£o expirada. FaÃ§a login novamente.");
+    setAuthMessage("info", "Sessão expirada. Faça login novamente.");
   }
 }
 
@@ -2707,11 +2706,11 @@ async function saveEditItem() {
 
     const info = getProdutoMarcaInfo(produto, marca);
     if (!info.produtoExists) {
-      setEditMessage("error", "Produto nÃ£o cadastrado.");
+      setEditMessage("error", "Produto não cadastrado.");
       return;
     }
     if (!info.marcaExists) {
-      setEditMessage("error", "Marca nÃ£o cadastrada para este produto.");
+      setEditMessage("error", "Marca não cadastrada para este produto.");
       return;
     }
 
@@ -2787,7 +2786,7 @@ async function saveEditItem() {
     }
 
     if (!state.user) {
-      setEditMessage("error", "FaÃ§a login para salvar alteracoes.");
+      setEditMessage("error", "Faça login para salvar alterações.");
       return;
     }
 
@@ -2947,7 +2946,7 @@ function setCountMode(mode) {
   if (mode === state.countMode) return;
   if (mode === "new") {
     const confirmed = window.confirm(
-      "Iniciar nova contagem? A contagem atual sÃ³ serÃ¡ substituÃ­da quando vocÃª salvar."
+      "Iniciar nova contagem? A contagem atual só será substituída quando você salvar."
     );
     if (!confirmed) return;
     state.countMode = "new";
@@ -2966,7 +2965,7 @@ function setCountMode(mode) {
 
 async function saveNewCount() {
   if (!state.user) {
-    pushMessage("warn", "FaÃ§a login para salvar a nova contagem.");
+    pushMessage("warn", "Faça login para salvar a nova contagem.");
     return;
   }
   if (!state.sessionRows.length) {
@@ -3016,7 +3015,7 @@ async function saveNewCount() {
 
 function discardNewCount() {
   const confirmed = window.confirm(
-    "Descartar a nova contagem? Os dados nÃ£o salvos serÃ£o perdidos."
+    "Descartar a nova contagem? Os dados não salvos serão perdidos."
   );
   if (!confirmed) return;
   state.sessionRows = [];
@@ -3207,13 +3206,13 @@ async function addManualItem() {
   }
 
   if (pallets <= 0) {
-    pushMessage("warn", "Informe uma quantidade de pallets vÃ¡lida.");
+    pushMessage("warn", "Informe uma quantidade de pallets válida.");
     return;
   }
 
   const regra = CONFIG_GERAL[setor]?.[produto]?.[marca];
   if (!regra) {
-    pushMessage("error", "CombinaÃ§Ã£o de setor/produto/marca invÃ¡lida.");
+    pushMessage("error", "Combinação de setor/produto/marca inválida.");
     return;
   }
 
@@ -3452,31 +3451,6 @@ function setupEvents() {
       if (error) {
         elements.authMsg.textContent = error.message;
         elements.authMsg.className = "msg error";
-      }
-    });
-  }
-
-  if (elements.signupBtn) {
-    elements.signupBtn.addEventListener("click", async () => {
-      const loginId = elements.email.value.trim();
-      const email = toAuthEmail(loginId);
-      if (!email) {
-        elements.authMsg.textContent = "Informe um usuario ou numero valido.";
-        elements.authMsg.className = "msg error";
-        return;
-      }
-      const password = elements.password.value;
-      const { error } = await supabaseClient.auth.signUp({
-        email,
-        password,
-      });
-      if (error) {
-        elements.authMsg.textContent = error.message;
-        elements.authMsg.className = "msg error";
-      } else {
-        elements.authMsg.textContent =
-          "Conta criada. Use o usuario e a senha para entrar.";
-        elements.authMsg.className = "msg info";
       }
     });
   }
@@ -3761,17 +3735,17 @@ function setupEvents() {
 
 async function handleAuthState(event, session) {
   state.user = session?.user ?? null;
-    if (state.user) {
-      if (event === "SIGNED_IN") {
-        setLoginTimestamp();
-      } else if (!getLoginTimestamp()) {
-        setLoginTimestamp();
-      }
-      storeUserLabel(state.user.id, state.user.email);
-      if (isSessionExpired()) {
-        await supabaseClient.auth.signOut();
+  if (state.user) {
+    if (event === "SIGNED_IN") {
+      setLoginTimestamp();
+    } else if (!getLoginTimestamp()) {
+      setLoginTimestamp();
+    }
+    storeUserLabel(state.user.id, state.user.email);
+    if (isSessionExpired()) {
+      await supabaseClient.auth.signOut();
       clearLoginTimestamp();
-      setAuthMessage("info", "SessÃ£o expirada. FaÃ§a login novamente.");
+      setAuthMessage("info", "Sessão expirada. Faça login novamente.");
       return;
     }
     if (elements.menuUserEmail) {
