@@ -19,6 +19,7 @@ const CONFIG_GERAL = {
     SAPO: {
       ANGEL: (t) => (t >= 4 && t <= 9 ? 72 : 65),
       SAMBA: (t) => (t >= 4 && t <= 7 ? 66 : 65),
+      "SAMBA REDE": (t) => 77,
       LOLA: (t) => 66,
       BAHIA: (t) => 66,
   
