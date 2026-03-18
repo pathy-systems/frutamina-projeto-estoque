@@ -311,6 +311,8 @@ function normalizeText(text) {
 
 const NO_TIPO_PRODUCTS = new Set(["PIMENTAO"]);
 const NO_TIPO_VALUE = 0;
+const TIPO_MIN = 3;
+const TIPO_MAX = 15;
 
 function isNoTipoProduct(produto) {
   if (!produto) return false;
@@ -324,6 +326,10 @@ function formatTipoLabelValue(produto, tipo) {
     }
   }
   return tipo;
+}
+
+function isTipoValid(tipo) {
+  return Number.isFinite(tipo) && tipo >= TIPO_MIN && tipo <= TIPO_MAX;
 }
 
 function tokenizeText(text) {
@@ -1807,7 +1813,7 @@ async function processCommand(rawText) {
 
     if (!noTipo && numericValues.length >= 2) {
       const candidateTipo = numericValues[0];
-      if (Number.isFinite(candidateTipo) && candidateTipo <= 30) {
+      if (isTipoValid(candidateTipo)) {
         tipoParaAdicionar = candidateTipo;
         state.tipo = candidateTipo;
       }
@@ -1818,6 +1824,11 @@ async function processCommand(rawText) {
         "warn",
         "Diga o tipo primeiro (ex: REI 4) para usar 'adicionar'."
       );
+      renderContext();
+      return;
+    }
+    if (!noTipo && !isTipoValid(tipoParaAdicionar)) {
+      pushMessage("warn", "Tipo deve estar entre 3 e 15.");
       renderContext();
       return;
     }
@@ -2016,10 +2027,18 @@ async function processCommand(rawText) {
       return;
     }
 
+    const tiposValid = tipos
+      .map((value) => Number.parseInt(value, 10))
+      .filter((value) => Number.isFinite(value) && isTipoValid(value));
+
+    if (!tiposValid.length) {
+      pushMessage("warn", "Tipo deve estar entre 3 e 15.");
+      renderContext();
+      return;
+    }
+
     const tipoCounts = new Map();
-    tipos.forEach((value) => {
-      const tipo = Number.parseInt(value, 10);
-      if (Number.isNaN(tipo)) return;
+    tiposValid.forEach((tipo) => {
       tipoCounts.set(tipo, (tipoCounts.get(tipo) || 0) + 1);
     });
 
@@ -2594,6 +2613,7 @@ async function saveEditItem() {
     const tipo = Number.parseInt(elements.editTipo.value, 10);
     const caixasPallet = Number.parseInt(elements.editCaixas.value, 10);
     const pallets = Number.parseInt(elements.editPallets.value, 10);
+    const noTipo = isNoTipoProduct(produto);
 
     const info = getProdutoMarcaInfo(produto, marca);
     if (!info.produtoExists) {
@@ -2638,14 +2658,23 @@ async function saveEditItem() {
       setEditMessage("error", "Preencha setor, produto e marca.");
       return;
     }
-    if (Number.isNaN(tipo) || Number.isNaN(caixasPallet) || Number.isNaN(pallets)) {
+    if (
+      Number.isNaN(caixasPallet) ||
+      Number.isNaN(pallets) ||
+      (!noTipo && Number.isNaN(tipo))
+    ) {
       setEditMessage(
         "error",
         "Preencha tipo, caixas/pallet e pallets com numeros validos."
       );
       return;
     }
+    if (!noTipo && !isTipoValid(tipo)) {
+      setEditMessage("error", "Tipo deve estar entre 3 e 15.");
+      return;
+    }
 
+    const tipoFinal = noTipo ? NO_TIPO_VALUE : tipo;
     const totalCaixas = caixasPallet * pallets;
 
     if (state.countMode === "new") {
@@ -2661,7 +2690,7 @@ async function saveEditItem() {
       row.setor = setor;
       row.produto = produto;
       row.marca = marca;
-      row.tipo = tipo;
+      row.tipo = tipoFinal;
       row.caixas_pallet = caixasPallet;
       row.pallets = pallets;
       row.total_caixas = totalCaixas;
@@ -2686,7 +2715,7 @@ async function saveEditItem() {
       setor,
       produto,
       marca,
-      tipo,
+      tipo: tipoFinal,
       caixas_pallet: caixasPallet,
       pallets,
       total_caixas: totalCaixas,
@@ -2985,6 +3014,28 @@ function setNumberOptions(select, min, max, currentValue, placeholder) {
   }
 }
 
+function updateManualTipoOptions() {
+  if (!elements.manualTipo || !elements.manualProduto) return;
+  const produto = elements.manualProduto.value;
+  if (isNoTipoProduct(produto)) {
+    elements.manualTipo.innerHTML = "";
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "S/T";
+    elements.manualTipo.appendChild(option);
+    elements.manualTipo.disabled = true;
+    return;
+  }
+  elements.manualTipo.disabled = false;
+  setNumberOptions(
+    elements.manualTipo,
+    TIPO_MIN,
+    TIPO_MAX,
+    elements.manualTipo.value,
+    "Selecione"
+  );
+}
+
 function listProductsBySetor(setor) {
   const products = new Set();
   if (setor) {
@@ -3043,7 +3094,7 @@ function initManualForm() {
     "",
     "Selecione"
   );
-  setNumberOptions(elements.manualTipo, 1, 20, "", "Selecione");
+  updateManualTipoOptions();
   setNumberOptions(elements.manualPallets, 1, 50, 1);
 }
 
@@ -3067,6 +3118,7 @@ function updateManualDependencies() {
     marcaAtual,
     "Selecione"
   );
+  updateManualTipoOptions();
 }
 
 async function addManualItem() {
@@ -3093,6 +3145,10 @@ async function addManualItem() {
 
   if (!noTipo && Number.isNaN(tipoInput)) {
     pushMessage("warn", "Informe o tipo.");
+    return;
+  }
+  if (!noTipo && !isTipoValid(tipoInput)) {
+    pushMessage("warn", "Tipo deve estar entre 3 e 15.");
     return;
   }
 
@@ -3124,7 +3180,7 @@ async function addManualItem() {
       setor,
       produto,
       marca,
-      tipo,
+      tipo: tipoFinal,
       caixas_pallet: caixasPallet,
       palletsDelta,
     });
