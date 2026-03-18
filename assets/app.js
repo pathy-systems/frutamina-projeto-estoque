@@ -1,4 +1,4 @@
-const SUPABASE_URL = "https://ldkazwnzfppcsoolydkp.supabase.co";
+﻿const SUPABASE_URL = "https://ldkazwnzfppcsoolydkp.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_14RDXtWzeDV-nzAHfGrNCw_lB4XsUSn";
 const TABLE_NAME = "estoque_registros";
 const SNAPSHOT_TABLE = "estoque_snapshots";
@@ -6,7 +6,7 @@ const SESSION_MAX_MS = 60 * 60 * 1000;
 const SUPABASE_TIMEOUT_MS = 45000;
 
 const CONFIG_GERAL = {
-  CHÃO: {
+  CHÃƒO: {
     AMARELO: {
       ANGEL: (t) => (t >= 4 && t <= 9 ? 72 : 65),
       BAHIA: (t) => 66,
@@ -59,9 +59,8 @@ const CONFIG_GERAL = {
     },
     DINO: {
       "MATISSE REI": (t) => (t >= 5 && t <= 6 ? 77 : 84),
-      "MAGALI 14Kg": (t) => 66,
+      "MATISSE CEPI": (t) => (t >= 5 && t <= 6 ? 77 : 84),
       CEPI: (t) => (t >= 5 && t <= 6 ? 77 : 84),
-      "CEPI 14Kg": (t) => 66,
     },
     CANTALOUPE: {
       "CANTALOUPE REI": (t) => (t >= 5 && t <= 6 ? 77 : 84),
@@ -71,7 +70,7 @@ const CONFIG_GERAL = {
       "GALIA REI": (t) => (t >= 5 && t <= 6 ? 77 : 84),
       "GALIA CEPI": (t) => (t >= 5 && t <= 6 ? 77 : 84),
     },
-    PIMENTÃO: {
+    PIMENTÃƒO: {
       AMARELO: (t) => 88,
       VERMELHO: (t) => 88,
       LARANJA: (t) => 88,
@@ -107,10 +106,24 @@ const NUMBER_WORDS = {
   VINTE: 20,
 };
 
+const ADD_KEYWORDS = new Set([
+  "ADICIONAR",
+  "ADICIONE",
+  "ADICIONA",
+  "SOMAR",
+  "SOME",
+  "SOMA",
+  "ACRESCENTAR",
+  "ACRESCENTE",
+  "ACRESCENTA",
+  "MAIS",
+]);
+
 const state = {
   setor: Object.keys(CONFIG_GERAL)[0],
   produto: null,
   marca: null,
+  tipo: null,
   countMode: "current",
   sessionRows: [],
   userRows: [],
@@ -268,13 +281,33 @@ const elements = {
 const PAGE_MODE = document.body?.dataset?.page || "view";
 
 function normalizeText(text) {
-  return (text || "")
+  const base = (text || "")
     .toUpperCase()
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[Ì€-Í¯]/g, "")
     .replace(/[^A-Z0-9 ]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+
+  if (!base) return "";
+
+  const spaced = base
+    .replace(/([A-Z])([0-9])/g, "$1 $2")
+    .replace(/([0-9])([A-Z])/g, "$1 $2");
+
+  const tokens = spaced.split(" ").filter(Boolean);
+  if (!tokens.length) return "";
+
+  const unitMap = {
+    QUILO: "KG",
+    QUILOS: "KG",
+    KILO: "KG",
+    KILOS: "KG",
+    QUILOGRAMA: "KG",
+    QUILOGRAMAS: "KG",
+  };
+
+  return tokens.map((token) => unitMap[token] || token).join(" ").trim();
 }
 
 const NO_TIPO_PRODUCTS = new Set(["PIMENTAO"]);
@@ -455,6 +488,11 @@ function extractNumbers(text) {
   return results;
 }
 
+function isAddCommand(text) {
+  const tokens = normalizeText(text).split(" ").filter(Boolean);
+  return tokens.some((token) => ADD_KEYWORDS.has(token));
+}
+
 function pushMessage(type, text) {
   if (!elements.messages) return;
   const msg = document.createElement("div");
@@ -613,7 +651,7 @@ async function enforceSessionLimit() {
   if (isSessionExpired()) {
     await supabaseClient.auth.signOut();
     clearLoginTimestamp();
-    setAuthMessage("info", "Sessão expirada. Faça login novamente.");
+    setAuthMessage("info", "SessÃ£o expirada. FaÃ§a login novamente.");
   }
 }
 
@@ -1777,6 +1815,7 @@ async function processCommand(rawText) {
     state.setor = sectorFound;
     state.produto = null;
     state.marca = null;
+    state.tipo = null;
     pushMessage("info", `Setor fixado: ${sectorFound}`);
   }
 
@@ -1798,6 +1837,7 @@ async function processCommand(rawText) {
     pushMessage("info", `Marca fixada: ${brandFound}`);
   } else if (productFound) {
     state.produto = productFound;
+    state.tipo = null;
     pushMessage("info", `Produto fixado: ${productFound}`);
     if (brandFound) {
       if (brandFound in products[productFound]) {
@@ -1820,6 +1860,7 @@ async function processCommand(rawText) {
       const inferredProduct = brandToProduct[normalizeText(brandFound)];
       if (inferredProduct) {
         state.produto = inferredProduct;
+        state.tipo = null;
         state.marca = brandFound;
         pushMessage("info", `Produto fixado: ${inferredProduct}`);
         pushMessage("info", `Marca fixada: ${brandFound}`);
@@ -1834,6 +1875,115 @@ async function processCommand(rawText) {
 
   const tipos = extractNumbers(normInput);
   const noTipo = isNoTipoProduct(state.produto);
+  const addCommand = isAddCommand(normInput);
+
+  if (addCommand && !tipos.length) {
+    pushMessage("warn", "Diga a quantidade para adicionar.");
+    renderContext();
+    return;
+  }
+
+  if (addCommand && tipos.length) {
+    if (!state.produto || !state.marca) {
+      pushMessage(
+        "warn",
+        "Diga primeiro o produto e a marca antes de adicionar quantidade."
+      );
+      renderContext();
+      return;
+    }
+
+    const regra = products[state.produto]?.[state.marca];
+    if (!regra) {
+      pushMessage(
+        "error",
+        `Essa marca '${state.marca}' nao tem regra para o produto '${state.produto}'.`
+      );
+      renderContext();
+      return;
+    }
+
+    const numericValues = tipos
+      .map((value) => Number.parseInt(value, 10))
+      .filter((value) => Number.isFinite(value) && value > 0);
+
+    if (!numericValues.length) {
+      renderContext();
+      return;
+    }
+
+    const quantity = numericValues[numericValues.length - 1];
+    let tipoParaAdicionar = noTipo ? NO_TIPO_VALUE : state.tipo;
+
+    if (!noTipo && (productFound || brandFound) && numericValues.length >= 2) {
+      const candidateTipo = numericValues[0];
+      if (Number.isFinite(candidateTipo)) {
+        tipoParaAdicionar = candidateTipo;
+        state.tipo = candidateTipo;
+      }
+    }
+
+    if (!noTipo && !Number.isFinite(tipoParaAdicionar)) {
+      pushMessage(
+        "warn",
+        "Diga o tipo primeiro (ex: REI 4) para usar 'adicionar'."
+      );
+      renderContext();
+      return;
+    }
+
+    const caixasPallet = regra(tipoParaAdicionar);
+    const palletsDelta = quantity;
+
+    if (state.countMode === "new") {
+      updateSessionAggregateRecord({
+        setor: state.setor,
+        produto: state.produto,
+        marca: state.marca,
+        tipo: tipoParaAdicionar,
+        caixas_pallet: caixasPallet,
+        palletsDelta,
+      });
+      renderCountTable();
+      pushMessage(
+        "success",
+        noTipo
+          ? `Adicionado (nova contagem): ${state.produto} ${state.marca} Pallets ${palletsDelta}`
+          : `Adicionado (nova contagem): ${state.produto} ${state.marca} Tipo ${tipoParaAdicionar} +${palletsDelta}`
+      );
+    } else {
+      updateAggregateRecord({
+        setor: state.setor,
+        produto: state.produto,
+        marca: state.marca,
+        tipo: tipoParaAdicionar,
+        caixas_pallet: caixasPallet,
+        palletsDelta,
+      });
+      renderPublicTable();
+      renderCountTable();
+      pushMessage(
+        "success",
+        noTipo
+          ? `Adicionado: ${state.produto} ${state.marca} Pallets ${palletsDelta}`
+          : `Adicionado: ${state.produto} ${state.marca} Tipo ${tipoParaAdicionar} +${palletsDelta}`
+      );
+
+      await upsertRecord({
+        setor: state.setor,
+        produto: state.produto,
+        marca: state.marca,
+        tipo: tipoParaAdicionar,
+        caixas_pallet: caixasPallet,
+        palletsDelta,
+      });
+      await loadUserRecords();
+      await loadPublicRecords();
+    }
+
+    renderContext();
+    return;
+  }
 
   if (noTipo && brandFound && !tipos.length) {
     const regra = products[state.produto]?.[state.marca];
@@ -1848,6 +1998,7 @@ async function processCommand(rawText) {
 
     const caixasPallet = regra(NO_TIPO_VALUE);
     const palletsDelta = 1;
+    state.tipo = NO_TIPO_VALUE;
 
     if (state.countMode === "new") {
       updateSessionAggregateRecord({
@@ -1927,6 +2078,7 @@ async function processCommand(rawText) {
       }
 
       const caixasPallet = regra(NO_TIPO_VALUE);
+      state.tipo = NO_TIPO_VALUE;
 
       if (state.countMode === "new") {
         updateSessionAggregateRecord({
@@ -1984,6 +2136,14 @@ async function processCommand(rawText) {
     if (!tipoCounts.size) {
       renderContext();
       return;
+    }
+
+    for (let i = tipos.length - 1; i >= 0; i -= 1) {
+      const lastTipo = Number.parseInt(tipos[i], 10);
+      if (Number.isFinite(lastTipo)) {
+        state.tipo = lastTipo;
+        break;
+      }
     }
 
     const tipoLabel = formatTipoCounts(tipoCounts);
@@ -2547,11 +2707,11 @@ async function saveEditItem() {
 
     const info = getProdutoMarcaInfo(produto, marca);
     if (!info.produtoExists) {
-      setEditMessage("error", "Produto não cadastrado.");
+      setEditMessage("error", "Produto nÃ£o cadastrado.");
       return;
     }
     if (!info.marcaExists) {
-      setEditMessage("error", "Marca não cadastrada para este produto.");
+      setEditMessage("error", "Marca nÃ£o cadastrada para este produto.");
       return;
     }
 
@@ -2627,7 +2787,7 @@ async function saveEditItem() {
     }
 
     if (!state.user) {
-      setEditMessage("error", "Faça login para salvar alteracoes.");
+      setEditMessage("error", "FaÃ§a login para salvar alteracoes.");
       return;
     }
 
@@ -2787,7 +2947,7 @@ function setCountMode(mode) {
   if (mode === state.countMode) return;
   if (mode === "new") {
     const confirmed = window.confirm(
-      "Iniciar nova contagem? A contagem atual só será substituída quando você salvar."
+      "Iniciar nova contagem? A contagem atual sÃ³ serÃ¡ substituÃ­da quando vocÃª salvar."
     );
     if (!confirmed) return;
     state.countMode = "new";
@@ -2806,7 +2966,7 @@ function setCountMode(mode) {
 
 async function saveNewCount() {
   if (!state.user) {
-    pushMessage("warn", "Faça login para salvar a nova contagem.");
+    pushMessage("warn", "FaÃ§a login para salvar a nova contagem.");
     return;
   }
   if (!state.sessionRows.length) {
@@ -2856,7 +3016,7 @@ async function saveNewCount() {
 
 function discardNewCount() {
   const confirmed = window.confirm(
-    "Descartar a nova contagem? Os dados não salvos serão perdidos."
+    "Descartar a nova contagem? Os dados nÃ£o salvos serÃ£o perdidos."
   );
   if (!confirmed) return;
   state.sessionRows = [];
@@ -3047,13 +3207,13 @@ async function addManualItem() {
   }
 
   if (pallets <= 0) {
-    pushMessage("warn", "Informe uma quantidade de pallets válida.");
+    pushMessage("warn", "Informe uma quantidade de pallets vÃ¡lida.");
     return;
   }
 
   const regra = CONFIG_GERAL[setor]?.[produto]?.[marca];
   if (!regra) {
-    pushMessage("error", "Combinação de setor/produto/marca inválida.");
+    pushMessage("error", "CombinaÃ§Ã£o de setor/produto/marca invÃ¡lida.");
     return;
   }
 
@@ -3326,6 +3486,7 @@ function setupEvents() {
       state.setor = event.target.value;
       state.produto = null;
       state.marca = null;
+      state.tipo = null;
       pushMessage("info", `Setor fixado: ${state.setor}`);
       renderContext();
       renderCountTable();
@@ -3405,6 +3566,7 @@ function setupEvents() {
     elements.clearContext.addEventListener("click", () => {
       state.produto = null;
       state.marca = null;
+      state.tipo = null;
       pushMessage("info", "Contexto limpo.");
       renderContext();
     });
@@ -3609,7 +3771,7 @@ async function handleAuthState(event, session) {
       if (isSessionExpired()) {
         await supabaseClient.auth.signOut();
       clearLoginTimestamp();
-      setAuthMessage("info", "Sessão expirada. Faça login novamente.");
+      setAuthMessage("info", "SessÃ£o expirada. FaÃ§a login novamente.");
       return;
     }
     if (elements.menuUserEmail) {
@@ -3708,3 +3870,4 @@ window.addEventListener("resize", () => {
     renderDashboard();
   }
 });
+
