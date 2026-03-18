@@ -4,21 +4,24 @@ const TABLE_NAME = "estoque_registros";
 const SNAPSHOT_TABLE = "estoque_snapshots";
 const SESSION_MAX_MS = 60 * 60 * 1000;
 const SUPABASE_TIMEOUT_MS = 45000;
+const PUBLIC_CACHE_KEY = "cd_public_cache";
+const PUBLIC_CACHE_AT_KEY = "cd_public_cache_at";
 
 const CONFIG_GERAL = {
   CHAO: {
     AMARELO: {
       ANGEL: (t) => (t >= 4 && t <= 9 ? 72 : 65),
       BAHIA: (t) => 66,
-      SAMBA: (t) => (t >= 4 && t <= 7 ? 66 : 65),
-      BRAZIL: (t) => (t >= 4 && t <= 7 ? 66 : 65),
+      SAMBA: (t) => (t >= 4 && t <= 6 ? 66 : 65),
+      BRAZIL: (t) => (t >= 4 && t <= 6 ? 66 : 65),
       "BRAZIL REDE": (t) => (t >= 4 && t <= 7 ? 66 : 65),
-      MOSSORO: (t) => (t >= 4 && t <= 7 ? 72 : 70),
-      "MOSSORO REDE": (t) => (t >= 4 && t <= 7 ? 72 : 70),
+      MOSSORO: (t) => (t >= 4 && t <= 6 ? 72 : 70),
+      "MOSSORO REDE": (t) => (t >= 4 && t <= 6 ? 72 : 70),
+      SOL: (t) => 72,
     },
     SAPO: {
       ANGEL: (t) => (t >= 4 && t <= 9 ? 72 : 65),
-      SAMBA: (t) => (t >= 4 && t <= 7 ? 66 : 65),
+      SAMBA: (t) => (t >= 4 && t <= 6 ? 66 : 65),
       "SAMBA REDE": (t) => 77,
       LOLA: (t) => 66,
       BAHIA: (t) => 66,
@@ -439,6 +442,27 @@ function setPublicMessage(type, text) {
   msg.className = `msg ${type}`;
   msg.textContent = text;
   elements.publicMsg.appendChild(msg);
+}
+
+function savePublicCache(rows) {
+  try {
+    localStorage.setItem(PUBLIC_CACHE_KEY, JSON.stringify(rows || []));
+    localStorage.setItem(PUBLIC_CACHE_AT_KEY, new Date().toISOString());
+  } catch (error) {
+    console.warn("Nao foi possivel salvar cache publico.", error);
+  }
+}
+
+function loadPublicCache() {
+  try {
+    const raw = localStorage.getItem(PUBLIC_CACHE_KEY);
+    if (!raw) return [];
+    const data = JSON.parse(raw);
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.warn("Nao foi possivel ler cache publico.", error);
+    return [];
+  }
 }
 
 function setEditMessage(type, text) {
@@ -1598,11 +1622,29 @@ async function loadPublicRecords() {
     );
 
   if (error) {
+    const cached = loadPublicCache();
+    if (cached.length) {
+      state.rawPublicRows = cached;
+      state.dashboardSeries = null;
+      state.dashboardHover.total = null;
+      state.dashboardHover.outflow = null;
+      state.publicRows = aggregateRows(cached);
+      updateLastUpdateFromRows(cached, "public");
+      renderPublicTable();
+      renderCountTable();
+      renderDashboard();
+      setPublicMessage(
+        "warn",
+        "Sem acesso ao servidor. Exibindo o ultimo estoque salvo."
+      );
+      return;
+    }
     setPublicMessage("error", `Erro ao carregar dados: ${error.message}`);
     return;
   }
 
   state.rawPublicRows = data || [];
+  savePublicCache(state.rawPublicRows);
   state.dashboardSeries = null;
   state.dashboardHover.total = null;
   state.dashboardHover.outflow = null;
@@ -2048,8 +2090,8 @@ async function processCommand(rawText) {
       return;
     }
 
-    for (let i = tipos.length - 1; i >= 0; i -= 1) {
-      const lastTipo = Number.parseInt(tipos[i], 10);
+    for (let i = tiposValid.length - 1; i >= 0; i -= 1) {
+      const lastTipo = tiposValid[i];
       if (Number.isFinite(lastTipo)) {
         state.tipo = lastTipo;
         break;
