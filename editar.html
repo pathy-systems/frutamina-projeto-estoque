@@ -28,7 +28,10 @@
       </header>
 
       <nav class="menu">
-        <button id="menu-view" class="ghost" data-href="index.html">Visão geral</button>
+        <button id="menu-view" class="ghost" data-href="index.html">Estoque</button>
+        <button id="menu-dashboard" class="ghost" data-href="visao-geral.html">
+          Visão geral
+        </button>
         <button id="menu-count" class="primary">Editar estoque</button>
         <div id="menu-user" class="user-chip hidden">
           <span>Usuário</span>
@@ -80,14 +83,14 @@
               <p>Selecione os campos abaixo para adicionar o item.</p>
             </div>
             <div class="table-wrap">
-              <table class="manual-table">
+              <table class="manual-table" id="manual-table">
                 <thead>
                   <tr>
                     <th>Setor</th>
                     <th>Produto</th>
                     <th>Marca</th>
-                    <th>Tipo</th>
-                    <th>Pallets</th>
+                    <th><span id="manual-label-tipo">Tipo</span></th>
+                    <th><span id="manual-label-qty">Pallets</span></th>
                     <th>Ação</th>
                   </tr>
                 </thead>
@@ -266,6 +269,6 @@
       </div>
     </div>
 
-    <script src="assets/app.js?v=20260317-3"></script>
+    <script src="assets/app.js?v=20260318-2"></script>
   </body>
 </html>

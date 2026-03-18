@@ -497,6 +497,11 @@ table.manual-table td:last-child {
   white-space: nowrap;
 }
 
+table.manual-table.box-mode th:nth-child(5),
+table.manual-table.box-mode td:nth-child(5) {
+  display: none;
+}
+
 th,
 td {
   text-align: left;
@@ -775,6 +780,136 @@ th {
   background: #ffffff;
   color: inherit;
   font-weight: 600;
+}
+
+.chart-wrap {
+  margin-top: 16px;
+  position: relative;
+  background: linear-gradient(180deg, #0f172a, #111827);
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.chart-wrap canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  cursor: crosshair;
+}
+
+.chart-metrics {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  color: #475569;
+}
+
+.chart-metrics .metric strong {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.dashboard-card {
+  background: #0b1220;
+  color: #e2e8f0;
+}
+
+.dashboard-card .card-header p,
+.dashboard-card .chart-sub {
+  color: #94a3b8;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dashboard-title {
+  margin: 6px 0 0;
+  font-family: "Space Grotesk", sans-serif;
+  color: #f8fafc;
+}
+
+.chart-summary {
+  margin-top: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.chart-main-value {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #f8fafc;
+}
+
+.chart-sub {
+  font-size: 14px;
+}
+
+.chart-date {
+  font-size: 12px;
+}
+
+.chart-range {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.range-btn {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: transparent;
+  color: #cbd5f5;
+  border: 1px solid transparent;
+  font-weight: 600;
+  font-size: 12px;
+  box-shadow: none;
+}
+
+.range-btn:hover {
+  background: rgba(148, 163, 184, 0.2);
+  box-shadow: none;
+}
+
+.range-btn.active {
+  background: #1e293b;
+  color: #ffffff;
+  border-color: #1e293b;
+}
+
+.chart-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(15, 23, 42, 0.95);
+  color: #f8fafc;
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  opacity: 0;
+  z-index: 2;
+  transform: translate(-50%, -120%);
+  transition: opacity 0.12s ease;
+  white-space: nowrap;
+}
+
+.chart-tooltip strong {
+  font-weight: 700;
+}
+
+.chart-tooltip .tooltip-date {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: #cbd5f5;
+}
+
+.chart-tooltip.visible {
+  opacity: 1;
 }
 
 .msg-area {

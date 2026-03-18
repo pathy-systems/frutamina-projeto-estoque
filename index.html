@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Estoque Digital</title>
+    <title>Estoque</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -23,13 +23,16 @@
         <div>
           <img src="assets/img/logo.webp" alt="logo" class="logo" />
           <p class="eyebrow">CD | Contagem do estoque</p>
-          <h1>Estoque Digital</h1>
+          <h1>Estoque</h1>
         </div>
       </header>
 
       <nav class="menu">
-        <button id="menu-view" class="ghost">Visão geral</button>
-        <button id="menu-count" class="primary" data-href="editar.html">Editar estoque</button>
+        <button id="menu-view" class="primary">Estoque</button>
+        <button id="menu-dashboard" class="ghost" data-href="visao-geral.html">
+          Visão geral
+        </button>
+        <button id="menu-count" class="ghost" data-href="editar.html">Editar estoque</button>
         <div id="menu-user" class="user-chip hidden">
           <span>Usuário</span>
           <strong id="menu-user-email">--</strong>
@@ -40,7 +43,7 @@
       <section id="public-panel" class="card">
         <div class="card-header">
           <h2>Contagem do Estoque</h2>
-          <p>Visualização geral. Para editar o estoque, clique em 'Editar estoque'.</p>
+          <p>Estoque atual. Para editar o estoque, clique em 'Editar estoque'.</p>
         </div>
         <form id="public-search-form" class="context-actions" role="search" autocomplete="off">
           <div class="autofill-trap" aria-hidden="true">
@@ -286,5 +289,5 @@
     </div>
 
   </body>
-  <script src="assets/app.js?v=20260317-3"></script>
+  <script src="assets/app.js?v=20260318-2"></script>
 </html>

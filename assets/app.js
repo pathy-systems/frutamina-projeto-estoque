@@ -5,36 +5,76 @@ const SESSION_MAX_MS = 60 * 60 * 1000;
 const SUPABASE_TIMEOUT_MS = 45000;
 
 const CONFIG_GERAL = {
-  GELADEIRA: {
-    CANTALOUPE: {
-      SAMBA: (t) => 65,
-      BRAZIL: (t) => 65,
+  CHÃO: {
+    AMARELO: {
+      ANGEL: (t) => (t >= 4 && t <= 9 ? 72 : 65),
+      BAHIA: (t) => 66,
+      SAMBA: (t) => (t >= 4 && t <= 7 ? 66 : 65),
+      BRAZIL: (t) => (t >= 4 && t <= 7 ? 66 : 65),
+      "BRAZIL REDE": (t) => (t >= 4 && t <= 7 ? 66 : 65),
+      MOSSORO: (t) => (t >= 4 && t <= 7 ? 72 : 70),
+      "MOSSORO REDE": (t) => (t >= 4 && t <= 7 ? 72 : 70),
     },
-    MATISSE: {
-      SAMBA: (t) => 84,
+    SAPO: {
+      ANGEL: (t) => (t >= 4 && t <= 9 ? 72 : 65),
+      SAMBA: (t) => (t >= 4 && t <= 7 ? 66 : 65),
+      LOLA: (t) => 66,
+      BAHIA: (t) => 66,
+  
     },
     MELANCIA: {
       SAMBA: (t) => (t >= 4 && t <= 7 ? 66 : 65),
       MOSSORO: (t) => 60,
     },
   },
-  CHÃO: {
-    AMARELO: {
-      ANGEL: (t) => (t >= 4 && t <= 9 ? 72 : 65),
-      SAMBA: (t) => (t >= 4 && t <= 7 ? 66 : 65),
-      BRAZIL: (t) => (t >= 4 && t <= 7 ? 66 : 65),
-      MOSSORO: (t) => (t >= 4 && t <= 7 ? 72 : 70),
-      "MOSSORO REDE": (t) => (t >= 4 && t <= 7 ? 72 : 70),
+  GELADEIRA: {
+    CANTALOUPE: {
+      SAMBA: (t) => 65,
+      BRAZIL: (t) => 65,
     },
-    SAPO: {
-      ANGEL: (t) => (t >= 4 && t <= 9 ? 72 : 65),
-     
+    DINO: {
+      SAMBA: (t) => 84,
+      BRAZIL: (t) => 84,
     },
   },
   ITAUEIRA: {
     AMARELO: {
       REI: (t) => (t === 4 ? 77 : 84),
+      "REI 14Kg": (t) => 66,
       CEPI: (t) => (t === 4 ? 77 : 84),
+      GAIA: (t) => (t === 4 ? 77 : 84),
+    },
+    SAPO: {
+      REI: (t) => (t === 4 ? 77 : 84),
+      "REI 14Kg": (t) => 66,
+      CEPI: (t) => (t === 4 ? 77 : 84),
+      GAIA: (t) => (t >= 6 && t <= 7 ? 66 : 65),
+    },
+    MELANCIA: {
+      MAGALI: (t) => (t >= 5 && t <= 6 ? 77 : 84),
+      "MAGALI 14Kg": (t) => 66,
+      CEPI: (t) => (t >= 5 && t <= 6 ? 77 : 84),
+      "CEPI 14Kg": (t) => 66,
+    },
+    DINO: {
+      "MATISSE REI": (t) => (t >= 5 && t <= 6 ? 77 : 84),
+      "MAGALI 14Kg": (t) => 66,
+      CEPI: (t) => (t >= 5 && t <= 6 ? 77 : 84),
+      "CEPI 14Kg": (t) => 66,
+    },
+    CANTALOUPE: {
+      "CANTALOUPE REI": (t) => (t >= 5 && t <= 6 ? 77 : 84),
+      "CANTALOUPE CEPI": (t) => (t >= 5 && t <= 6 ? 77 : 84),
+    },
+    GALIA: {
+      "GALIA REI": (t) => (t >= 5 && t <= 6 ? 77 : 84),
+      "GALIA CEPI": (t) => (t >= 5 && t <= 6 ? 77 : 84),
+    },
+    PIMENTÃO: {
+      AMARELO: (t) => 88,
+      VERMELHO: (t) => 88,
+      LARANJA: (t) => 88,
+      DUO: (t) => 88,
     },
   },
 };
@@ -87,13 +127,25 @@ const state = {
   lastUpdatePublicAt: null,
   lastUpdateCountAt: null,
   publicRows: [],
+  rawPublicRows: [],
   user: null,
+  dashboardRange: "1D",
+  dashboardSeries: null,
+  dashboardHover: {
+    total: null,
+    outflow: null,
+  },
+  dashboardMeta: {
+    total: null,
+    outflow: null,
+  },
 };
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const elements = {
   menuView: document.getElementById("menu-view"),
+  menuDashboard: document.getElementById("menu-dashboard"),
   menuCount: document.getElementById("menu-count"),
   menuUser: document.getElementById("menu-user"),
   menuUserEmail: document.getElementById("menu-user-email"),
@@ -129,6 +181,7 @@ const elements = {
   publicMsg: document.getElementById("public-msg"),
   authPanel: document.getElementById("auth-panel"),
   countPanel: document.getElementById("count-panel"),
+  dashboardPanel: document.getElementById("dashboard-panel"),
   loginBtn: document.getElementById("login-btn"),
   signupBtn: document.getElementById("signup-btn"),
   email: document.getElementById("email"),
@@ -182,6 +235,9 @@ const elements = {
   manualTipo: document.getElementById("manual-tipo"),
   manualPallets: document.getElementById("manual-pallets"),
   manualAdd: document.getElementById("manual-add"),
+  manualTable: document.getElementById("manual-table"),
+  manualLabelTipo: document.getElementById("manual-label-tipo"),
+  manualLabelQty: document.getElementById("manual-label-qty"),
   messages: document.getElementById("messages"),
   countTableBody: document.getElementById("count-table-body"),
   countTotalGeral: document.getElementById("count-total-geral"),
@@ -192,6 +248,17 @@ const elements = {
   countExportPdf: document.getElementById("count-export-pdf"),
   countExportPrint: document.getElementById("count-export-print"),
   countClearBtn: document.getElementById("count-clear-btn"),
+  chartRange: document.getElementById("chart-range"),
+  chartTotal: document.getElementById("chart-total"),
+  chartTotalValue: document.getElementById("chart-total-value"),
+  chartTotalChange: document.getElementById("chart-total-change"),
+  chartTotalDate: document.getElementById("chart-total-date"),
+  chartTotalTooltip: document.getElementById("chart-total-tooltip"),
+  chartOutflow: document.getElementById("chart-outflow"),
+  chartOutflowValue: document.getElementById("chart-outflow-value"),
+  chartOutflowChange: document.getElementById("chart-outflow-change"),
+  chartOutflowDate: document.getElementById("chart-outflow-date"),
+  chartOutflowTooltip: document.getElementById("chart-outflow-tooltip"),
 };
 
 const PAGE_MODE = document.body?.dataset?.page || "view";
@@ -204,6 +271,136 @@ function normalizeText(text) {
     .replace(/[^A-Z0-9 ]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+const NO_TIPO_PRODUCTS = new Set(["PIMENTAO"]);
+const NO_TIPO_VALUE = 0;
+
+function isNoTipoProduct(produto) {
+  if (!produto) return false;
+  return NO_TIPO_PRODUCTS.has(normalizeText(produto));
+}
+
+function formatTipoLabelValue(produto, tipo) {
+  if (isNoTipoProduct(produto)) {
+    if (tipo === null || tipo === undefined || Number(tipo) === NO_TIPO_VALUE) {
+      return "S/T";
+    }
+  }
+  return tipo;
+}
+
+function jaroSimilarity(a, b) {
+  const s = a || "";
+  const t = b || "";
+  if (s === t) return 1;
+  const sLen = s.length;
+  const tLen = t.length;
+  if (!sLen || !tLen) return 0;
+
+  const matchDistance = Math.floor(Math.max(sLen, tLen) / 2) - 1;
+  const sMatches = new Array(sLen).fill(false);
+  const tMatches = new Array(tLen).fill(false);
+  let matches = 0;
+
+  for (let i = 0; i < sLen; i += 1) {
+    const start = Math.max(0, i - matchDistance);
+    const end = Math.min(i + matchDistance + 1, tLen);
+    for (let j = start; j < end; j += 1) {
+      if (tMatches[j]) continue;
+      if (s[i] !== t[j]) continue;
+      sMatches[i] = true;
+      tMatches[j] = true;
+      matches += 1;
+      break;
+    }
+  }
+
+  if (!matches) return 0;
+
+  let transpositions = 0;
+  let k = 0;
+  for (let i = 0; i < sLen; i += 1) {
+    if (!sMatches[i]) continue;
+    while (!tMatches[k]) k += 1;
+    if (s[i] !== t[k]) transpositions += 1;
+    k += 1;
+  }
+  transpositions /= 2;
+
+  return (
+    (matches / sLen +
+      matches / tLen +
+      (matches - transpositions) / matches) /
+    3
+  );
+}
+
+function jaroWinkler(a, b) {
+  const jaro = jaroSimilarity(a, b);
+  const prefixLimit = 4;
+  let prefix = 0;
+  for (let i = 0; i < Math.min(prefixLimit, a.length, b.length); i += 1) {
+    if (a[i] === b[i]) {
+      prefix += 1;
+    } else {
+      break;
+    }
+  }
+  return jaro + prefix * 0.1 * (1 - jaro);
+}
+
+function minSimilarityForLength(length) {
+  if (length <= 4) return 0.76;
+  if (length <= 7) return 0.7;
+  if (length <= 12) return 0.66;
+  return 0.62;
+}
+
+function findClosestInText(text, map) {
+  const normalized = normalizeText(text);
+  if (!normalized) return null;
+  const tokens = normalized.split(" ").filter(Boolean);
+  if (!tokens.length) return null;
+
+  const keys = Object.keys(map || {});
+  let bestScore = 0;
+  let bestValue = null;
+  let bestKeyLength = 0;
+
+  keys.forEach((key) => {
+    if (!key) return;
+    const keyTokens = key.split(" ").filter(Boolean);
+    const size = keyTokens.length || 1;
+    const keyStr = keyTokens.join("");
+    if (!keyStr) return;
+
+    const compareCandidate = (candidateTokens) => {
+      if (!candidateTokens.length) return;
+      if (candidateTokens.some((token) => /\d/.test(token))) return;
+      const candidate = candidateTokens.join("");
+      if (!candidate.length || !keyStr.length) return;
+      const score = jaroWinkler(candidate, keyStr);
+      if (score > bestScore || (score === bestScore && keyStr.length > bestKeyLength)) {
+        bestScore = score;
+        bestValue = map[key];
+        bestKeyLength = keyStr.length;
+      }
+    };
+
+    if (tokens.length < size) {
+      compareCandidate(tokens);
+      return;
+    }
+
+    for (let i = 0; i <= tokens.length - size; i += 1) {
+      compareCandidate(tokens.slice(i, i + size));
+    }
+  });
+
+  if (!bestValue) return null;
+  const threshold = minSimilarityForLength(bestKeyLength);
+  return bestScore >= threshold ? bestValue : null;
 }
 
 function toAuthEmail(value) {
@@ -692,17 +889,473 @@ function renderCountSummary() {
   });
 }
 
+function formatNumber(value) {
+  if (!Number.isFinite(value)) return "--";
+  return new Intl.NumberFormat("pt-BR").format(Math.round(value));
+}
+
+function formatPercent(value) {
+  if (!Number.isFinite(value)) return "--";
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+const RANGE_PRESETS = {
+  "1D": { unit: "hour", size: 24, label: "ultimas 24h" },
+  "5D": { unit: "day", size: 5, label: "ultimos 5 dias" },
+  "1M": { unit: "day", size: 30, label: "ultimo mes" },
+  "6M": { unit: "day", size: 180, label: "ultimos 6 meses" },
+  "1Y": { unit: "day", size: 365, label: "ultimo ano" },
+  "5Y": { unit: "day", size: 365 * 5, label: "ultimos 5 anos" },
+  MAX: { unit: "day", size: null, label: "todo o periodo" },
+};
+
+function normalizeRange(value) {
+  const key = String(value || "").toUpperCase();
+  return RANGE_PRESETS[key] ? key : "1D";
+}
+
+function getRangeLabel(range) {
+  const key = normalizeRange(range);
+  return RANGE_PRESETS[key]?.label || "todo o periodo";
+}
+
+function endOfDay(date) {
+  const next = new Date(date);
+  next.setHours(23, 59, 59, 999);
+  return next;
+}
+
+function endOfHour(date) {
+  const next = new Date(date);
+  next.setMinutes(59, 59, 999);
+  return next;
+}
+
+function getEarliestDate(rows) {
+  let earliest = null;
+  (rows || []).forEach((row) => {
+    if (!row?.updated_at) return;
+    const date = new Date(row.updated_at);
+    if (Number.isNaN(date.getTime())) return;
+    if (!earliest || date < earliest) earliest = date;
+  });
+  return earliest;
+}
+
+function buildTimeSeries(rows, range) {
+  const key = normalizeRange(range);
+  const preset = RANGE_PRESETS[key];
+  const now = new Date();
+  const dates = [];
+
+  if (preset.unit === "hour") {
+    const end = endOfHour(now);
+    const start = new Date(end);
+    start.setHours(end.getHours() - (preset.size - 1));
+    for (let i = 0; i < preset.size; i += 1) {
+      const date = new Date(start);
+      date.setHours(start.getHours() + i);
+      dates.push(endOfHour(date));
+    }
+  } else {
+    const end = endOfDay(now);
+    let start = new Date(end);
+    if (preset.size) {
+      start.setDate(end.getDate() - (preset.size - 1));
+    } else {
+      const earliest = getEarliestDate(rows) || end;
+      start = endOfDay(earliest);
+    }
+    const cursor = new Date(start);
+    while (cursor <= end) {
+      dates.push(endOfDay(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+
+  if (!dates.length) {
+    dates.push(endOfDay(now));
+  }
+
+  const values = dates.map((date) => {
+    return (rows || []).reduce((sum, row) => {
+      const updatedAt = row?.updated_at ? new Date(row.updated_at) : null;
+      if (!updatedAt || Number.isNaN(updatedAt.getTime())) return sum;
+      if (updatedAt <= date) {
+        return sum + (Number(row.total_caixas) || 0);
+      }
+      return sum;
+    }, 0);
+  });
+
+  return { dates, values, range: key };
+}
+
+function buildOutflowSeries(values) {
+  return values.map((value, index) => {
+    if (index === 0) return 0;
+    const prev = values[index - 1] ?? value;
+    return Math.max(0, prev - value);
+  });
+}
+
+function formatTooltipDate(date, range) {
+  if (!date) return "--";
+  const key = normalizeRange(range);
+  const options =
+    key === "1D"
+      ? { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }
+      : key === "5D" || key === "1M"
+        ? { day: "2-digit", month: "short" }
+        : { day: "2-digit", month: "short", year: "2-digit" };
+  return new Intl.DateTimeFormat("pt-BR", options).format(date);
+}
+
+function renderLineChart(canvas, series, options = {}) {
+  if (!canvas) return;
+  const values = series?.values || [];
+  const dates = series?.dates || [];
+  const parentWidth = canvas.parentElement?.clientWidth || 900;
+  const height = options.height || 260;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = parentWidth * dpr;
+  canvas.height = height * dpr;
+  canvas.style.width = `${parentWidth}px`;
+  canvas.style.height = `${height}px`;
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const padding = {
+    top: 24,
+    right: 20,
+    bottom: options.showLabels ? 32 : 16,
+    left: 42,
+  };
+  const width = parentWidth;
+  const innerWidth = width - padding.left - padding.right;
+  const innerHeight = height - padding.top - padding.bottom;
+
+  ctx.clearRect(0, 0, width, height);
+
+  const maxValue = values.length ? Math.max(...values, 1) : 1;
+  const minValue = values.length ? Math.min(...values, 0) : 0;
+  const range = maxValue - minValue || 1;
+
+  const getX = (index) =>
+    padding.left + (innerWidth * index) / Math.max(values.length - 1, 1);
+  const getY = (value) =>
+    padding.top + innerHeight - ((value - minValue) / range) * innerHeight;
+
+  ctx.strokeStyle = options.gridColor || "rgba(148, 163, 184, 0.25)";
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 3; i += 1) {
+    const y = padding.top + (innerHeight * i) / 2;
+    ctx.beginPath();
+    ctx.moveTo(padding.left, y);
+    ctx.lineTo(width - padding.right, y);
+    ctx.stroke();
+  }
+
+  if (values.length) {
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    values.forEach((value, index) => {
+      const x = getX(index);
+      const y = getY(value);
+      if (index === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    });
+    ctx.strokeStyle = options.lineColor || "#93c5fd";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    const gradient = ctx.createLinearGradient(0, padding.top, 0, height);
+    gradient.addColorStop(0, options.fillStart || "rgba(59, 130, 246, 0.35)");
+    gradient.addColorStop(1, options.fillEnd || "rgba(59, 130, 246, 0.05)");
+    ctx.lineTo(
+      padding.left + innerWidth,
+      padding.top + innerHeight
+    );
+    ctx.lineTo(padding.left, padding.top + innerHeight);
+    ctx.closePath();
+    ctx.fillStyle = gradient;
+    ctx.fill();
+
+    const lastIndex = values.length - 1;
+    const lastX = getX(lastIndex);
+    const lastY = getY(values[lastIndex]);
+    ctx.fillStyle = options.lineColor || "#93c5fd";
+    ctx.beginPath();
+    ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (Number.isInteger(options.hoverIndex)) {
+    const index = Math.max(0, Math.min(values.length - 1, options.hoverIndex));
+    const hx = getX(index);
+    const hy = getY(values[index]);
+    ctx.save();
+    ctx.strokeStyle = options.hoverLineColor || "rgba(148, 163, 184, 0.5)";
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(hx, padding.top);
+    ctx.lineTo(hx, padding.top + innerHeight);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = options.hoverDotColor || options.lineColor || "#93c5fd";
+    ctx.beginPath();
+    ctx.arc(hx, hy, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  return {
+    width,
+    height,
+    padding,
+    innerWidth,
+    innerHeight,
+    getX,
+    getY,
+    values,
+    dates,
+  };
+}
+
+function buildDashboardSeries(range) {
+  const rows = state.rawPublicRows || [];
+  const total = buildTimeSeries(rows, range);
+  const outflowValues = buildOutflowSeries(total.values);
+  const outflow = {
+    dates: total.dates,
+    values: outflowValues,
+    range: total.range,
+  };
+  return { range: total.range, total, outflow };
+}
+
+function renderDashboard(force = false) {
+  if (PAGE_MODE !== "dashboard") return;
+  if (!elements.chartTotal || !elements.chartOutflow) return;
+
+  if (
+    !state.dashboardSeries ||
+    force ||
+    state.dashboardSeries.range !== normalizeRange(state.dashboardRange)
+  ) {
+    state.dashboardSeries = buildDashboardSeries(state.dashboardRange);
+  }
+
+  const series = state.dashboardSeries;
+  const total = series.total;
+  const outflow = series.outflow;
+
+  state.dashboardMeta.total = renderLineChart(elements.chartTotal, total, {
+    lineColor: "#93c5fd",
+    fillStart: "rgba(59, 130, 246, 0.35)",
+    fillEnd: "rgba(59, 130, 246, 0.05)",
+    labelColor: "#cbd5f5",
+    showLabels: false,
+    hoverIndex: state.dashboardHover.total,
+  });
+
+  state.dashboardMeta.outflow = renderLineChart(elements.chartOutflow, outflow, {
+    lineColor: "#fca5a5",
+    fillStart: "rgba(248, 113, 113, 0.35)",
+    fillEnd: "rgba(248, 113, 113, 0.05)",
+    labelColor: "#e2e8f0",
+    showLabels: false,
+    hoverIndex: state.dashboardHover.outflow,
+  });
+
+  const totalValues = total.values;
+  const lastIndex = totalValues.length - 1;
+  const firstValue = totalValues[0] ?? 0;
+  const lastValue = totalValues[lastIndex] ?? 0;
+  const diff = lastValue - firstValue;
+  const sign = diff >= 0 ? "+" : "-";
+  const pct =
+    firstValue > 0 ? (Math.abs(diff) / firstValue) * 100 : null;
+  const rangeLabel = getRangeLabel(series.range);
+  const lastDate = total.dates[lastIndex] || new Date();
+
+  if (elements.chartTotalValue) {
+    elements.chartTotalValue.textContent = formatNumber(lastValue);
+  }
+  if (elements.chartTotalChange) {
+    const pctText = pct === null ? "" : ` (${formatPercent(pct)}%)`;
+    elements.chartTotalChange.textContent = `${sign}${formatNumber(
+      Math.abs(diff)
+    )}${pctText} ${rangeLabel}`;
+  }
+  if (elements.chartTotalDate) {
+    elements.chartTotalDate.textContent = formatTooltipDate(
+      lastDate,
+      series.range
+    );
+  }
+
+  const outflowValues = outflow.values || [];
+  const outflowSum = outflowValues.reduce((sum, value) => sum + value, 0);
+  const outflowMax = outflowValues.length ? Math.max(...outflowValues) : 0;
+
+  if (elements.chartOutflowValue) {
+    elements.chartOutflowValue.textContent = formatNumber(outflowSum);
+  }
+  if (elements.chartOutflowChange) {
+    elements.chartOutflowChange.textContent = `Pico: ${formatNumber(outflowMax)}`;
+  }
+  if (elements.chartOutflowDate) {
+    elements.chartOutflowDate.textContent = formatTooltipDate(
+      lastDate,
+      series.range
+    );
+  }
+}
+
+function updateRangeButtons(range) {
+  if (!elements.chartRange) return;
+  const normalized = normalizeRange(range);
+  elements.chartRange.querySelectorAll(".range-btn").forEach((button) => {
+    const buttonRange = normalizeRange(button.dataset.range);
+    button.classList.toggle("active", buttonRange === normalized);
+  });
+}
+
+function setDashboardRange(range) {
+  const normalized = normalizeRange(range);
+  if (state.dashboardRange === normalized && state.dashboardSeries) {
+    updateRangeButtons(normalized);
+    return;
+  }
+  state.dashboardRange = normalized;
+  state.dashboardSeries = null;
+  state.dashboardHover.total = null;
+  state.dashboardHover.outflow = null;
+  updateRangeButtons(normalized);
+  if (elements.chartTotalTooltip) {
+    elements.chartTotalTooltip.classList.remove("visible");
+  }
+  if (elements.chartOutflowTooltip) {
+    elements.chartOutflowTooltip.classList.remove("visible");
+  }
+  renderDashboard(true);
+}
+
+function updateChartTooltip(tooltip, meta, index, range, unitLabel = "caixas") {
+  if (!tooltip || !meta) return;
+  if (!Number.isInteger(index) || index < 0 || index >= meta.values.length) {
+    tooltip.classList.remove("visible");
+    return;
+  }
+  const value = meta.values[index] ?? 0;
+  const date = meta.dates[index];
+  const x = meta.getX(index);
+  const y = meta.getY(value);
+  const minX = 12;
+  const maxX = meta.width - 12;
+  const left = Math.min(Math.max(x, minX), maxX);
+  const top = Math.max(y, 24);
+  tooltip.innerHTML = `<strong>${formatNumber(value)}</strong> ${unitLabel}<span class="tooltip-date">${formatTooltipDate(
+    date,
+    range
+  )}</span>`;
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${top}px`;
+  tooltip.classList.add("visible");
+}
+
+function attachChartHover(canvas, tooltip, key) {
+  if (!canvas) return;
+  const handleMove = (event) => {
+    const meta = state.dashboardMeta[key];
+    if (!meta || !meta.values.length) {
+      if (tooltip) tooltip.classList.remove("visible");
+      return;
+    }
+    const rect = canvas.getBoundingClientRect();
+    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+    const x = clientX - rect.left;
+    if (x < meta.padding.left || x > meta.width - meta.padding.right) {
+      if (state.dashboardHover[key] !== null) {
+        state.dashboardHover[key] = null;
+        renderDashboard();
+      }
+      if (tooltip) tooltip.classList.remove("visible");
+      return;
+    }
+    const ratio = (x - meta.padding.left) / meta.innerWidth;
+    const index = Math.max(
+      0,
+      Math.min(meta.values.length - 1, Math.round(ratio * (meta.values.length - 1)))
+    );
+    if (state.dashboardHover[key] !== index) {
+      state.dashboardHover[key] = index;
+      renderDashboard();
+    }
+    updateChartTooltip(tooltip, state.dashboardMeta[key], index, state.dashboardRange);
+  };
+
+  const handleLeave = () => {
+    if (state.dashboardHover[key] !== null) {
+      state.dashboardHover[key] = null;
+      renderDashboard();
+    }
+    if (tooltip) tooltip.classList.remove("visible");
+  };
+
+  canvas.addEventListener("mousemove", handleMove);
+  canvas.addEventListener("mouseleave", handleLeave);
+  canvas.addEventListener("touchmove", handleMove, { passive: true });
+  canvas.addEventListener("touchend", handleLeave);
+}
+
+function setupDashboard() {
+  if (PAGE_MODE !== "dashboard") return;
+  if (elements.chartRange) {
+    const active = elements.chartRange.querySelector(".range-btn.active");
+    if (active?.dataset?.range) {
+      state.dashboardRange = normalizeRange(active.dataset.range);
+    }
+    updateRangeButtons(state.dashboardRange);
+    elements.chartRange.addEventListener("click", (event) => {
+      const button = event.target.closest(".range-btn");
+      if (!button?.dataset?.range) return;
+      setDashboardRange(button.dataset.range);
+    });
+  }
+
+  attachChartHover(
+    elements.chartTotal,
+    elements.chartTotalTooltip,
+    "total"
+  );
+  attachChartHover(
+    elements.chartOutflow,
+    elements.chartOutflowTooltip,
+    "outflow"
+  );
+}
+
 function renderPublicTable() {
   if (!elements.publicTableBody || !elements.publicTotalGeral) return;
   elements.publicTableBody.innerHTML = "";
   let total = 0;
   const rows = state.publicRows.filter(matchesPublicFilters);
   for (const row of rows) {
+    const tipoLabel = formatTipoLabelValue(row.produto, row.tipo);
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${row.produto}</td>
       <td>${row.marca}</td>
-      <td>${row.tipo}</td>
+      <td>${tipoLabel}</td>
       <td>${row.caixas_pallet}</td>
       <td>${row.pallets}</td>
       <td>${row.total_caixas}</td>
@@ -740,6 +1393,7 @@ function renderCountTable() {
   const showActions = PAGE_MODE === "edit";
   const rows = getCountRowsForSetor();
   for (const row of rows) {
+    const tipoLabel = formatTipoLabelValue(row.produto, row.tipo);
     const tr = document.createElement("tr");
     const rowKey = getRowKey(row);
     if (rowKey) {
@@ -759,7 +1413,7 @@ function renderCountTable() {
     tr.innerHTML = `
       <td>${row.produto}</td>
       <td>${row.marca}</td>
-      <td>${row.tipo}</td>
+      <td>${tipoLabel}</td>
       <td>${row.caixas_pallet}</td>
       <td>${row.pallets}</td>
       <td>${totalCaixas}</td>
@@ -839,10 +1493,15 @@ async function loadPublicRecords() {
     return;
   }
 
+  state.rawPublicRows = data || [];
+  state.dashboardSeries = null;
+  state.dashboardHover.total = null;
+  state.dashboardHover.outflow = null;
   state.publicRows = aggregateRows(data || []);
   updateLastUpdateFromRows(data || [], "public");
   renderPublicTable();
   renderCountTable();
+  renderDashboard();
   setPublicMessage("", "");
 }
 
@@ -967,7 +1626,9 @@ async function processCommand(rawText) {
     sectorMap[normalizeText(sector)] = sector;
   });
 
-  const sectorFound = findInText(normInput, sectorMap);
+  const sectorFound =
+    findInText(normInput, sectorMap) ||
+    findClosestInText(normInput, sectorMap);
   if (sectorFound) {
     state.setor = sectorFound;
     state.produto = null;
@@ -979,10 +1640,19 @@ async function processCommand(rawText) {
     state.setor
   );
 
-  const productFound = findInText(normInput, productMap);
-  const brandFound = findInText(normInput, brandMap);
+  const productFound =
+    findInText(normInput, productMap) ||
+    findClosestInText(normInput, productMap);
+  const brandFound =
+    findInText(normInput, brandMap) || findClosestInText(normInput, brandMap);
 
-  if (productFound) {
+  const brandMatchesCurrent =
+    state.produto && brandFound && products[state.produto]?.[brandFound];
+
+  if (brandMatchesCurrent && isNoTipoProduct(state.produto)) {
+    state.marca = brandFound;
+    pushMessage("info", `Marca fixada: ${brandFound}`);
+  } else if (productFound) {
     state.produto = productFound;
     pushMessage("info", `Produto fixado: ${productFound}`);
     if (brandFound) {
@@ -1019,6 +1689,68 @@ async function processCommand(rawText) {
   }
 
   const tipos = extractNumbers(normInput);
+  const noTipo = isNoTipoProduct(state.produto);
+
+  if (noTipo && brandFound && !tipos.length) {
+    const regra = products[state.produto]?.[state.marca];
+    if (!regra) {
+      pushMessage(
+        "error",
+        `Essa marca '${state.marca}' n?o tem regra para o produto '${state.produto}'.`
+      );
+      renderContext();
+      return;
+    }
+
+    const caixasPallet = regra(NO_TIPO_VALUE);
+    const palletsDelta = 1;
+
+    if (state.countMode === "new") {
+      updateSessionAggregateRecord({
+        setor: state.setor,
+        produto: state.produto,
+        marca: state.marca,
+        tipo: NO_TIPO_VALUE,
+        caixas_pallet: caixasPallet,
+        palletsDelta,
+      });
+      renderCountTable();
+      pushMessage(
+        "success",
+        `Registrado (nova contagem): ${state.produto} ${state.marca} Pallets ${palletsDelta}`
+      );
+    } else {
+      updateAggregateRecord({
+        setor: state.setor,
+        produto: state.produto,
+        marca: state.marca,
+        tipo: NO_TIPO_VALUE,
+        caixas_pallet: caixasPallet,
+        palletsDelta,
+      });
+      renderPublicTable();
+      renderCountTable();
+      pushMessage(
+        "success",
+        `Registrado: ${state.produto} ${state.marca} Pallets ${palletsDelta}`
+      );
+
+      await upsertRecord({
+        setor: state.setor,
+        produto: state.produto,
+        marca: state.marca,
+        tipo: NO_TIPO_VALUE,
+        caixas_pallet: caixasPallet,
+        palletsDelta,
+      });
+      await loadUserRecords();
+      await loadPublicRecords();
+    }
+
+    renderContext();
+    return;
+  }
+
   if (tipos.length) {
     if (!state.produto || !state.marca) {
       pushMessage(
@@ -1035,6 +1767,65 @@ async function processCommand(rawText) {
         "error",
         `Essa marca '${state.marca}' n?o tem regra para o produto '${state.produto}'.`
       );
+      renderContext();
+      return;
+    }
+
+    if (noTipo) {
+      const palletsTotal = tipos
+        .map((value) => Number.parseInt(value, 10))
+        .filter((value) => Number.isFinite(value) && value > 0)
+        .reduce((acc, value) => acc + value, 0);
+
+      if (!palletsTotal) {
+        renderContext();
+        return;
+      }
+
+      const caixasPallet = regra(NO_TIPO_VALUE);
+
+      if (state.countMode === "new") {
+        updateSessionAggregateRecord({
+          setor: state.setor,
+          produto: state.produto,
+          marca: state.marca,
+          tipo: NO_TIPO_VALUE,
+          caixas_pallet: caixasPallet,
+          palletsDelta: palletsTotal,
+        });
+        renderCountTable();
+        pushMessage(
+          "success",
+          `Registrado (nova contagem): ${state.produto} ${state.marca} Pallets ${palletsTotal}`
+        );
+      } else {
+        updateAggregateRecord({
+          setor: state.setor,
+          produto: state.produto,
+          marca: state.marca,
+          tipo: NO_TIPO_VALUE,
+          caixas_pallet: caixasPallet,
+          palletsDelta: palletsTotal,
+        });
+        renderPublicTable();
+        renderCountTable();
+        pushMessage(
+          "success",
+          `Registrado: ${state.produto} ${state.marca} Pallets ${palletsTotal}`
+        );
+
+        await upsertRecord({
+          setor: state.setor,
+          produto: state.produto,
+          marca: state.marca,
+          tipo: NO_TIPO_VALUE,
+          caixas_pallet: caixasPallet,
+          palletsDelta: palletsTotal,
+        });
+        await loadUserRecords();
+        await loadPublicRecords();
+      }
+
       renderContext();
       return;
     }
@@ -2059,7 +2850,7 @@ function initManualForm() {
     "Selecione"
   );
   setNumberOptions(elements.manualTipo, 1, 20, "", "Selecione");
-  setNumberOptions(elements.manualPallets, 1, 20, 1);
+  setNumberOptions(elements.manualPallets, 1, 50, 1);
 }
 
 function updateManualDependencies() {
@@ -2097,11 +2888,17 @@ async function addManualItem() {
   const setor = elements.manualSetor.value;
   const produto = elements.manualProduto.value;
   const marca = elements.manualMarca.value;
-  const tipo = Number.parseInt(elements.manualTipo.value, 10);
+  const tipoInput = Number.parseInt(elements.manualTipo.value, 10);
   const pallets = Number.parseInt(elements.manualPallets?.value, 10) || 1;
+  const noTipo = isNoTipoProduct(produto);
 
-  if (!setor || !produto || !marca || Number.isNaN(tipo)) {
-    pushMessage("warn", "Preencha setor, produto, marca e tipo.");
+  if (!setor || !produto || !marca) {
+    pushMessage("warn", "Preencha setor, produto e marca.");
+    return;
+  }
+
+  if (!noTipo && Number.isNaN(tipoInput)) {
+    pushMessage("warn", "Informe o tipo.");
     return;
   }
 
@@ -2116,6 +2913,7 @@ async function addManualItem() {
     return;
   }
 
+  const tipo = noTipo ? NO_TIPO_VALUE : tipoInput;
   const caixasPallet = regra(tipo);
   const palletsDelta = pallets;
 
@@ -2139,7 +2937,9 @@ async function addManualItem() {
     renderCountTable();
     pushMessage(
       "success",
-      `Registrado (nova contagem): ${produto} ${marca} Tipo ${tipo}`
+      noTipo
+        ? `Registrado (nova contagem): ${produto} ${marca} Pallets ${palletsDelta}`
+        : `Registrado (nova contagem): ${produto} ${marca} Tipo ${tipo}`
     );
     return;
   }
@@ -2154,7 +2954,12 @@ async function addManualItem() {
   });
   renderPublicTable();
   renderCountTable();
-  pushMessage("success", `Registrado: ${produto} ${marca} Tipo ${tipo}`);
+  pushMessage(
+    "success",
+    noTipo
+      ? `Registrado: ${produto} ${marca} Pallets ${palletsDelta}`
+      : `Registrado: ${produto} ${marca} Tipo ${tipo}`
+  );
 
   await upsertRecord({
     setor,
@@ -2211,6 +3016,18 @@ function setupEvents() {
     } else if (elements.publicPanel) {
       elements.menuView.addEventListener("click", () => {
         elements.publicPanel.scrollIntoView({ behavior: "smooth" });
+      });
+    }
+  }
+
+  if (elements.menuDashboard) {
+    if (elements.menuDashboard.dataset.href) {
+      elements.menuDashboard.addEventListener("click", () => {
+        window.location.href = elements.menuDashboard.dataset.href;
+      });
+    } else if (elements.dashboardPanel) {
+      elements.menuDashboard.addEventListener("click", () => {
+        elements.dashboardPanel.scrollIntoView({ behavior: "smooth" });
       });
     }
   }
@@ -2306,71 +3123,75 @@ function setupEvents() {
 
   if (elements.menuLogout) {
     elements.menuLogout.addEventListener("click", async () => {
-      await supabaseClient.auth.signOut();
+      const { error } = await supabaseClient.auth.signOut();
+      if (error) {
+        setAuthMessage("error", `Erro ao sair: ${error.message}`);
+      }
+      await handleAuthState("SIGNED_OUT", null);
     });
   }
 
   if (elements.loginBtn) {
     elements.loginBtn.addEventListener("click", async () => {
-    const loginId = elements.email.value.trim();
-    const email = toAuthEmail(loginId);
-    if (!email) {
-      elements.authMsg.textContent = "Informe um usuario ou numero valido.";
-      elements.authMsg.className = "msg error";
-      return;
-    }
-    const password = elements.password.value;
-    const { error } = await supabaseClient.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) {
-      elements.authMsg.textContent = error.message;
-      elements.authMsg.className = "msg error";
-    }
+      const loginId = elements.email.value.trim();
+      const email = toAuthEmail(loginId);
+      if (!email) {
+        elements.authMsg.textContent = "Informe um usuario ou numero valido.";
+        elements.authMsg.className = "msg error";
+        return;
+      }
+      const password = elements.password.value;
+      const { error } = await supabaseClient.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) {
+        elements.authMsg.textContent = error.message;
+        elements.authMsg.className = "msg error";
+      }
     });
   }
 
   if (elements.signupBtn) {
     elements.signupBtn.addEventListener("click", async () => {
-    const loginId = elements.email.value.trim();
-    const email = toAuthEmail(loginId);
-    if (!email) {
-      elements.authMsg.textContent = "Informe um usuario ou numero valido.";
-      elements.authMsg.className = "msg error";
-      return;
-    }
-    const password = elements.password.value;
-    const { error } = await supabaseClient.auth.signUp({
-      email,
-      password,
-    });
-    if (error) {
-      elements.authMsg.textContent = error.message;
-      elements.authMsg.className = "msg error";
-    } else {
-      elements.authMsg.textContent =
-        "Conta criada. Use o usuario e a senha para entrar.";
-      elements.authMsg.className = "msg info";
-    }
+      const loginId = elements.email.value.trim();
+      const email = toAuthEmail(loginId);
+      if (!email) {
+        elements.authMsg.textContent = "Informe um usuario ou numero valido.";
+        elements.authMsg.className = "msg error";
+        return;
+      }
+      const password = elements.password.value;
+      const { error } = await supabaseClient.auth.signUp({
+        email,
+        password,
+      });
+      if (error) {
+        elements.authMsg.textContent = error.message;
+        elements.authMsg.className = "msg error";
+      } else {
+        elements.authMsg.textContent =
+          "Conta criada. Use o usuario e a senha para entrar.";
+        elements.authMsg.className = "msg info";
+      }
     });
   }
 
   if (elements.setorSelect) {
     elements.setorSelect.addEventListener("change", (event) => {
-    state.setor = event.target.value;
-    state.produto = null;
-    state.marca = null;
-    pushMessage("info", `Setor fixado: ${state.setor}`);
-    renderContext();
-    renderCountTable();
+      state.setor = event.target.value;
+      state.produto = null;
+      state.marca = null;
+      pushMessage("info", `Setor fixado: ${state.setor}`);
+      renderContext();
+      renderCountTable();
     });
   }
 
   if (elements.publicSearch) {
     elements.publicSearch.addEventListener("input", (event) => {
-    state.publicQuery = event.target.value;
-    renderPublicTable();
+      state.publicQuery = event.target.value;
+      renderPublicTable();
     });
   }
 
@@ -2411,22 +3232,22 @@ function setupEvents() {
 
   if (elements.filterApply) {
     elements.filterApply.addEventListener("click", () => {
-    state.publicFilters = {
-      setor: elements.filterSetor.value,
-      produto: elements.filterProduto.value,
-      marca: elements.filterMarca.value,
-      tipo: elements.filterTipo.value.trim(),
-    };
-    renderPublicTable();
-    closeFilterModal();
+      state.publicFilters = {
+        setor: elements.filterSetor.value,
+        produto: elements.filterProduto.value,
+        marca: elements.filterMarca.value,
+        tipo: elements.filterTipo.value.trim(),
+      };
+      renderPublicTable();
+      closeFilterModal();
     });
   }
 
   if (elements.filterClear) {
     elements.filterClear.addEventListener("click", () => {
-    state.publicFilters = { setor: "", produto: "", marca: "", tipo: "" };
-    buildFilterOptions();
-    renderPublicTable();
+      state.publicFilters = { setor: "", produto: "", marca: "", tipo: "" };
+      buildFilterOptions();
+      renderPublicTable();
     });
   }
 
@@ -2438,10 +3259,10 @@ function setupEvents() {
 
   if (elements.clearContext) {
     elements.clearContext.addEventListener("click", () => {
-    state.produto = null;
-    state.marca = null;
-    pushMessage("info", "Contexto limpo.");
-    renderContext();
+      state.produto = null;
+      state.marca = null;
+      pushMessage("info", "Contexto limpo.");
+      renderContext();
     });
   }
 
@@ -2614,53 +3435,62 @@ function setupEvents() {
   }
 }
 
-function setupAuth() {
-  supabaseClient.auth.onAuthStateChange(async (event, session) => {
-    state.user = session?.user ?? null;
-    if (state.user) {
-      if (event === "SIGNED_IN") {
-        setLoginTimestamp();
-      }
-      if (isSessionExpired()) {
-        await supabaseClient.auth.signOut();
-        clearLoginTimestamp();
-        setAuthMessage("info", "Sessão expirada. Faça login novamente.");
-        return;
-      }
-      if (elements.menuUserEmail) {
-        elements.menuUserEmail.textContent = displayUserFromEmail(
-          state.user.email
-        );
-      }
-      if (elements.menuUser) elements.menuUser.classList.remove("hidden");
-      if (elements.menuLogout) elements.menuLogout.classList.remove("hidden");
-      if (PAGE_MODE === "edit") {
-        hideAuthPanel();
-        if (elements.countPanel) elements.countPanel.classList.remove("hidden");
-        renderContext();
-        renderCountTable();
-        updateCountModeUI();
-        await loadUserRecords();
-      } else {
-        hideAuthPanel();
-        hideCountPanels();
-      }
-    } else {
-      if (event === "SIGNED_OUT") {
-        clearLoginTimestamp();
-      }
-      if (elements.menuUser) elements.menuUser.classList.add("hidden");
-      if (elements.menuLogout) elements.menuLogout.classList.add("hidden");
-      if (PAGE_MODE === "edit") {
-        showAuthPanel();
-        hideCountPanels();
-        state.userRows = [];
-        renderCountTable();
-      } else {
-        hideAuthPanel();
-        hideCountPanels();
-      }
+async function handleAuthState(event, session) {
+  state.user = session?.user ?? null;
+  if (state.user) {
+    if (event === "SIGNED_IN") {
+      setLoginTimestamp();
+    } else if (!getLoginTimestamp()) {
+      setLoginTimestamp();
     }
+    if (isSessionExpired()) {
+      await supabaseClient.auth.signOut();
+      clearLoginTimestamp();
+      setAuthMessage("info", "Sessão expirada. Faça login novamente.");
+      return;
+    }
+    if (elements.menuUserEmail) {
+      elements.menuUserEmail.textContent = displayUserFromEmail(
+        state.user.email
+      );
+    }
+    if (elements.menuUser) elements.menuUser.classList.remove("hidden");
+    if (elements.menuLogout) elements.menuLogout.classList.remove("hidden");
+    if (PAGE_MODE === "edit") {
+      hideAuthPanel();
+      if (elements.countPanel) elements.countPanel.classList.remove("hidden");
+      renderContext();
+      renderCountTable();
+      updateCountModeUI();
+      await loadUserRecords();
+    } else {
+      hideAuthPanel();
+      hideCountPanels();
+    }
+  } else {
+    if (event === "SIGNED_OUT") {
+      clearLoginTimestamp();
+    }
+    if (elements.menuUser) elements.menuUser.classList.add("hidden");
+    if (elements.menuLogout) elements.menuLogout.classList.add("hidden");
+    if (PAGE_MODE === "edit") {
+      showAuthPanel();
+      hideCountPanels();
+      state.userRows = [];
+      renderCountTable();
+    } else {
+      hideAuthPanel();
+      hideCountPanels();
+    }
+  }
+}
+
+function setupAuth() {
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    handleAuthState(event, session);
+  });
+  supabaseClient.auth.getSession().then(({ data }) => {
+    handleAuthState("INITIAL_SESSION", data?.session ?? null);
   });
 }
 
@@ -2702,6 +3532,13 @@ setCountViewMode(state.countViewMode);
 updateCountModeUI();
 setupVoice();
 setupEvents();
+setupDashboard();
 setupAuth();
 loadPublicRecords();
 setInterval(enforceSessionLimit, 60 * 1000);
+
+window.addEventListener("resize", () => {
+  if (PAGE_MODE === "dashboard") {
+    renderDashboard();
+  }
+});
