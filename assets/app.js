@@ -301,16 +301,17 @@ function normalizeText(text) {
   const tokens = spaced.split(" ").filter(Boolean);
   if (!tokens.length) return "";
 
-  const unitMap = {
+  const tokenMap = {
     QUILO: "KG",
     QUILOS: "KG",
     KILO: "KG",
     KILOS: "KG",
     QUILOGRAMA: "KG",
     QUILOGRAMAS: "KG",
+    CEP: "CEPI",
   };
 
-  return tokens.map((token) => unitMap[token] || token).join(" ").trim();
+  return tokens.map((token) => tokenMap[token] || token).join(" ").trim();
 }
 
 const NO_TIPO_PRODUCTS = new Set(["PIMENTAO"]);
