@@ -2327,68 +2327,56 @@ function getExportNode(scope) {
 
 function openPrintWindow(title, contentNode) {
   if (!contentNode) return;
-
-  const existing = document.getElementById("print-area");
-  if (existing) existing.remove();
-  const existingOverlay = document.getElementById("print-overlay");
-  if (existingOverlay) existingOverlay.remove();
-
-  const printArea = document.createElement("div");
-  printArea.id = "print-area";
-  printArea.className = "print-area";
-
-  const heading = document.createElement("h1");
-  heading.textContent = title;
-  printArea.appendChild(heading);
-
   const clone = contentNode.cloneNode(true);
   clone
     .querySelectorAll(".actions, .table-modes, .view-toggle")
     .forEach((node) => node.remove());
-  printArea.appendChild(clone);
 
-  document.body.appendChild(printArea);
-  document.body.classList.add("print-mode");
-
-  const overlay = document.createElement("div");
-  overlay.id = "print-overlay";
-  overlay.className = "print-overlay";
-  overlay.innerHTML = `
-    <div class="print-overlay-card">
-      <strong>Impressao pronta</strong>
-      <span>Clique em imprimir para abrir o dialogo.</span>
-      <div class="print-overlay-actions">
-        <button type="button" id="print-now-btn" class="primary">Imprimir</button>
-        <button type="button" id="print-cancel-btn" class="ghost">Cancelar</button>
-      </div>
-    </div>
+  const styles = `
+    body { font-family: "Source Sans 3", Arial, sans-serif; padding: 20px; color: #111827; }
+    h1 { font-family: "Space Grotesk", sans-serif; font-size: 18px; margin: 0 0 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border: 1px solid #111827; padding: 6px 8px; text-align: center; }
+    th:first-child, td:first-child { text-align: left; }
+    .summary-grid { display: grid; gap: 16px; }
+    .summary-card { border: 1px solid #111827; padding: 8px; page-break-inside: avoid; }
+    .summary-header { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+    .summary-header h3 { margin: 0; font-size: 14px; }
+    .table-wrap { overflow: visible; }
+    .table-footer, .table-modes, .view-toggle, .actions { display: none !important; }
+    .print-actions { display: flex; gap: 8px; margin: 0 0 16px; }
+    .print-actions button { padding: 8px 12px; border-radius: 10px; border: 1px solid #cbd5f5; background: #1d4ed8; color: #fff; cursor: pointer; }
+    .print-actions button.secondary { background: #e2e8f0; color: #0f172a; border-color: #e2e8f0; }
+    @media print {
+      .print-actions { display: none !important; }
+    }
   `;
-  document.body.appendChild(overlay);
 
-  const cleanup = () => {
-    document.body.classList.remove("print-mode");
-    const node = document.getElementById("print-area");
-    if (node) node.remove();
-    const layer = document.getElementById("print-overlay");
-    if (layer) layer.remove();
-    window.onafterprint = null;
-  };
+  const win = window.open("", "_blank");
+  if (!win) {
+    pushMessage("warn", "Popup bloqueado. Permita pop-ups para imprimir.");
+    return;
+  }
 
-  window.onafterprint = cleanup;
-  const printBtn = document.getElementById("print-now-btn");
-  const cancelBtn = document.getElementById("print-cancel-btn");
-  if (cancelBtn) {
-    cancelBtn.addEventListener("click", () => {
-      cleanup();
-    });
-  }
-  if (printBtn) {
-    printBtn.addEventListener("click", () => {
-      // Forca o navegador a renderizar o conteudo antes do print
-      void printArea.offsetHeight;
-      window.print();
-    });
-  }
+  win.document.open();
+  win.document.write(
+    `<!doctype html>
+    <html>
+      <head>
+        <title>${title}</title>
+        <style>${styles}</style>
+      </head>
+      <body>
+        <div class="print-actions">
+          <button onclick="window.print()">Imprimir</button>
+          <button class="secondary" onclick="window.close()">Fechar</button>
+        </div>
+        <h1>${title}</h1>
+        ${clone.outerHTML}
+      </body>
+    </html>`
+  );
+  win.document.close();
 }
 
 function handleExport(scope, format) {
