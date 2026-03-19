@@ -2332,19 +2332,56 @@ function openPrintWindow(title, contentNode) {
     .querySelectorAll(".actions, .table-modes, .view-toggle")
     .forEach((node) => node.remove());
 
+  const isMobilePrint =
+    (window.matchMedia && window.matchMedia("(max-width: 820px)").matches) ||
+    /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const mobileStyles = isMobilePrint
+    ? `
+    @media print {
+      .summary-card { display: block; width: 100%; }
+      .summary-card + .summary-card {
+        break-before: page;
+        page-break-before: always;
+      }
+    }
+  `
+    : "";
+
   const styles = `
     @page { size: A4 portrait; margin: 12mm; }
     body { font-family: "Source Sans 3", Arial, sans-serif; padding: 0; color: #111827; }
     h1 { font-family: "Space Grotesk", sans-serif; font-size: 18px; margin: 0 0 12px; }
     table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed; }
+    thead { display: table-header-group; }
     th, td { border: 1px solid #111827; padding: 6px 8px; text-align: center; }
     th:first-child, td:first-child { text-align: left; }
     th, td { word-break: break-word; }
-    .summary-grid { display: grid; gap: 16px; }
-    .summary-card { border: 1px solid #111827; padding: 8px; page-break-inside: avoid; }
+    tr { break-inside: avoid; page-break-inside: avoid; }
+    .summary-grid { display: block; }
+    .summary-card {
+      display: inline-block;
+      width: 100%;
+      border: 1px solid #111827;
+      padding: 8px;
+      margin-bottom: 12px;
+      break-inside: avoid;
+      break-inside: avoid-page;
+      page-break-inside: avoid;
+      -webkit-column-break-inside: avoid;
+    }
     .summary-header { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
     .summary-header h3 { margin: 0; font-size: 14px; }
-    .table-wrap { overflow: visible; }
+    .table-wrap {
+      overflow: visible;
+      break-inside: avoid;
+      page-break-inside: avoid;
+      -webkit-column-break-inside: avoid;
+    }
+    table {
+      break-inside: avoid;
+      page-break-inside: avoid;
+      -webkit-column-break-inside: avoid;
+    }
     .table-footer, .table-modes, .view-toggle, .actions { display: none !important; }
     .print-actions { display: flex; gap: 8px; margin: 0 0 16px; }
     .print-actions button { padding: 8px 12px; border-radius: 10px; border: 1px solid #cbd5f5; background: #1d4ed8; color: #fff; cursor: pointer; }
@@ -2352,6 +2389,7 @@ function openPrintWindow(title, contentNode) {
     @media print {
       .print-actions { display: none !important; }
     }
+    ${mobileStyles}
   `;
 
   const win = window.open("", "_blank");
