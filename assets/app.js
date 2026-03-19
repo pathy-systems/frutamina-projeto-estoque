@@ -2327,59 +2327,39 @@ function getExportNode(scope) {
 
 function openPrintWindow(title, contentNode) {
   if (!contentNode) return;
-  const frame = document.createElement("iframe");
-  frame.setAttribute("aria-hidden", "true");
-  frame.style.position = "fixed";
-  frame.style.right = "0";
-  frame.style.bottom = "0";
-  frame.style.width = "0";
-  frame.style.height = "0";
-  frame.style.border = "0";
-  frame.style.opacity = "0";
-  document.body.appendChild(frame);
 
-  const styles = `
-    body { font-family: "Source Sans 3", Arial, sans-serif; padding: 20px; color: #111827; }
-    h1 { font-family: "Space Grotesk", sans-serif; font-size: 18px; margin: 0 0 12px; }
-    table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    th, td { border: 1px solid #111827; padding: 6px 8px; text-align: center; }
-    th:first-child, td:first-child { text-align: left; }
-    .summary-grid { display: grid; gap: 16px; }
-    .summary-card { border: 1px solid #111827; padding: 8px; page-break-inside: avoid; }
-    .summary-header { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
-    .summary-header h3 { margin: 0; font-size: 14px; }
-    .table-wrap { overflow: visible; }
-    .table-footer, .table-modes, .view-toggle, .actions { display: none !important; }
-  `;
+  const existing = document.getElementById("print-area");
+  if (existing) existing.remove();
 
-  const doc = frame.contentDocument || frame.contentWindow.document;
+  const printArea = document.createElement("div");
+  printArea.id = "print-area";
+  printArea.className = "print-area";
+
+  const heading = document.createElement("h1");
+  heading.textContent = title;
+  printArea.appendChild(heading);
+
   const clone = contentNode.cloneNode(true);
   clone
     .querySelectorAll(".actions, .table-modes, .view-toggle")
     .forEach((node) => node.remove());
+  printArea.appendChild(clone);
 
-  doc.open();
-  doc.write(
-    `<!doctype html><html><head><title>${title}</title><style>${styles}</style></head><body><h1>${title}</h1></body></html>`
-  );
-  doc.close();
-  doc.body.appendChild(clone);
+  document.body.appendChild(printArea);
+  document.body.classList.add("print-mode");
 
   const cleanup = () => {
-    frame.remove();
+    document.body.classList.remove("print-mode");
+    const node = document.getElementById("print-area");
+    if (node) node.remove();
+    window.onafterprint = null;
   };
 
-  const contentWindow = frame.contentWindow;
-  if (contentWindow) {
-    contentWindow.focus();
-    contentWindow.onafterprint = cleanup;
-    try {
-      contentWindow.print();
-    } finally {
-      setTimeout(cleanup, 2000);
-    }
-  } else {
-    cleanup();
+  window.onafterprint = cleanup;
+  try {
+    window.print();
+  } finally {
+    setTimeout(cleanup, 2000);
   }
 }
 

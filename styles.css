@@ -948,6 +948,73 @@ th {
   display: none;
 }
 
+@media print {
+  body.print-mode * {
+    visibility: hidden !important;
+  }
+  body.print-mode #print-area,
+  body.print-mode #print-area * {
+    visibility: visible !important;
+  }
+  body.print-mode #print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 24px;
+    color: #111827;
+    background: #ffffff;
+  }
+  body.print-mode #print-area h1 {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 18px;
+    margin: 0 0 12px;
+  }
+  body.print-mode #print-area table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  body.print-mode #print-area th,
+  body.print-mode #print-area td {
+    border: 1px solid #111827;
+    padding: 6px 8px;
+    text-align: center;
+  }
+  body.print-mode #print-area th:first-child,
+  body.print-mode #print-area td:first-child {
+    text-align: left;
+  }
+  body.print-mode #print-area .summary-grid {
+    display: grid;
+    gap: 16px;
+  }
+  body.print-mode #print-area .summary-card {
+    border: 1px solid #111827;
+    padding: 8px;
+    page-break-inside: avoid;
+  }
+  body.print-mode #print-area .summary-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  body.print-mode #print-area .summary-header h3 {
+    margin: 0;
+    font-size: 14px;
+  }
+  body.print-mode #print-area .table-wrap {
+    overflow: visible;
+  }
+  body.print-mode #print-area .table-footer,
+  body.print-mode #print-area .table-modes,
+  body.print-mode #print-area .view-toggle,
+  body.print-mode #print-area .actions {
+    display: none !important;
+  }
+}
+
 @media (max-width: 720px) {
   .hero {
     flex-direction: column;
