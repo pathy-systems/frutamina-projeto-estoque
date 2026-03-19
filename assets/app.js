@@ -2373,10 +2373,11 @@ function openPrintWindow(title, contentNode) {
   if (contentWindow) {
     contentWindow.focus();
     contentWindow.onafterprint = cleanup;
-    setTimeout(() => {
+    try {
       contentWindow.print();
+    } finally {
       setTimeout(cleanup, 2000);
-    }, 300);
+    }
   } else {
     cleanup();
   }
