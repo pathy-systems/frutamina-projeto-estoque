@@ -2333,11 +2333,13 @@ function openPrintWindow(title, contentNode) {
     .forEach((node) => node.remove());
 
   const styles = `
-    body { font-family: "Source Sans 3", Arial, sans-serif; padding: 20px; color: #111827; }
+    @page { size: A4 portrait; margin: 12mm; }
+    body { font-family: "Source Sans 3", Arial, sans-serif; padding: 0; color: #111827; }
     h1 { font-family: "Space Grotesk", sans-serif; font-size: 18px; margin: 0 0 12px; }
-    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed; }
     th, td { border: 1px solid #111827; padding: 6px 8px; text-align: center; }
     th:first-child, td:first-child { text-align: left; }
+    th, td { word-break: break-word; }
     .summary-grid { display: grid; gap: 16px; }
     .summary-card { border: 1px solid #111827; padding: 8px; page-break-inside: avoid; }
     .summary-header { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
