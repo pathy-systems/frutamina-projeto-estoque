@@ -2330,6 +2330,8 @@ function openPrintWindow(title, contentNode) {
 
   const existing = document.getElementById("print-area");
   if (existing) existing.remove();
+  const existingOverlay = document.getElementById("print-overlay");
+  if (existingOverlay) existingOverlay.remove();
 
   const printArea = document.createElement("div");
   printArea.id = "print-area";
@@ -2348,20 +2350,44 @@ function openPrintWindow(title, contentNode) {
   document.body.appendChild(printArea);
   document.body.classList.add("print-mode");
 
+  const overlay = document.createElement("div");
+  overlay.id = "print-overlay";
+  overlay.className = "print-overlay";
+  overlay.innerHTML = `
+    <div class="print-overlay-card">
+      <strong>Impressao pronta</strong>
+      <span>Clique em imprimir para abrir o dialogo.</span>
+      <div class="print-overlay-actions">
+        <button type="button" id="print-now-btn" class="primary">Imprimir</button>
+        <button type="button" id="print-cancel-btn" class="ghost">Cancelar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
   const cleanup = () => {
     document.body.classList.remove("print-mode");
     const node = document.getElementById("print-area");
     if (node) node.remove();
+    const layer = document.getElementById("print-overlay");
+    if (layer) layer.remove();
     window.onafterprint = null;
   };
 
   window.onafterprint = cleanup;
-  // Forca o navegador a renderizar o conteudo antes do print
-  void printArea.offsetHeight;
-  try {
-    window.print();
-  } finally {
-    // Se o navegador nao disparar onafterprint, o proximo print limpa o conteudo.
+  const printBtn = document.getElementById("print-now-btn");
+  const cancelBtn = document.getElementById("print-cancel-btn");
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", () => {
+      cleanup();
+    });
+  }
+  if (printBtn) {
+    printBtn.addEventListener("click", () => {
+      // Forca o navegador a renderizar o conteudo antes do print
+      void printArea.offsetHeight;
+      window.print();
+    });
   }
 }
 
