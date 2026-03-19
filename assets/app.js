@@ -11,7 +11,8 @@ const CONFIG_GERAL = {
   CHAO: {
     AMARELO: {
       ANGEL: (t) => (t >= 4 && t <= 9 ? 72 : 65),
-      BAHIA: (t) => 66,
+      "BAHIA (LULA)": (t) => 66,
+      "BAHIA (ANGELA)": (t) => 66,
       SAMBA: (t) => (t >= 4 && t <= 6 ? 66 : 65),
       BRAZIL: (t) => (t >= 4 && t <= 6 ? 66 : 65),
       "BRAZIL REDE": (t) => (t >= 4 && t <= 7 ? 66 : 65),
@@ -123,6 +124,15 @@ const ADD_KEYWORDS = new Set([
   "MAIS",
 ]);
 
+const BOX_KEYWORDS = new Set([
+  "CAIXA",
+  "CAIXAS",
+  "CX",
+  "CXS",
+  "AVULSA",
+  "AVULSAS",
+]);
+
 const state = {
   setor: Object.keys(CONFIG_GERAL)[0],
   produto: null,
@@ -161,6 +171,230 @@ const state = {
     outflow: null,
   },
 };
+
+function toInt(value, fallback = 0) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toNonNegativeInt(value, fallback = 0) {
+  return Math.max(0, toInt(value, fallback));
+}
+
+function normalizeInventoryMetrics({
+  caixasPallet,
+  pallets = 0,
+  caixasAvulsas,
+  totalCaixas,
+}) {
+  const caixasPorPallet = toNonNegativeInt(caixasPallet, 0);
+  let palletsCount = toNonNegativeInt(pallets, 0);
+  const hasLooseBoxesValue =
+    caixasAvulsas !== undefined && caixasAvulsas !== null && caixasAvulsas !== "";
+  let looseBoxes = toNonNegativeInt(caixasAvulsas, 0);
+  let totalBoxes = toNonNegativeInt(totalCaixas, 0);
+
+  if (!caixasPorPallet) {
+    if (!hasLooseBoxesValue) {
+      totalBoxes = toNonNegativeInt(totalCaixas, palletsCount);
+      looseBoxes = totalBoxes;
+      palletsCount = 0;
+    } else {
+      totalBoxes = looseBoxes;
+      palletsCount = 0;
+    }
+
+    return {
+      caixas_pallet: caixasPorPallet,
+      pallets: palletsCount,
+      caixas_avulsas: looseBoxes,
+      total_caixas: totalBoxes,
+    };
+  }
+
+  if (hasLooseBoxesValue) {
+    if (looseBoxes >= caixasPorPallet) {
+      palletsCount += Math.floor(looseBoxes / caixasPorPallet);
+      looseBoxes %= caixasPorPallet;
+    }
+    totalBoxes = palletsCount * caixasPorPallet + looseBoxes;
+  } else {
+    totalBoxes = toNonNegativeInt(
+      totalCaixas,
+      palletsCount * caixasPorPallet
+    );
+    palletsCount = Math.floor(totalBoxes / caixasPorPallet);
+    looseBoxes = totalBoxes % caixasPorPallet;
+  }
+
+  return {
+    caixas_pallet: caixasPorPallet,
+    pallets: palletsCount,
+    caixas_avulsas: looseBoxes,
+    total_caixas: totalBoxes,
+  };
+}
+
+function hydrateInventoryRow(row, overrides = {}) {
+  const base = { ...(row || {}), ...(overrides || {}) };
+  const metrics = normalizeInventoryMetrics({
+    caixasPallet: base.caixas_pallet,
+    pallets: base.pallets,
+    caixasAvulsas: base.caixas_avulsas,
+    totalCaixas: base.total_caixas,
+  });
+  return {
+    ...base,
+    ...metrics,
+  };
+}
+
+function applyInventoryDeltas(target, { caixas_pallet, palletsDelta = 0, caixasAvulsasDelta = 0 }) {
+  if (!target) return;
+  const metrics = normalizeInventoryMetrics({
+    caixasPallet: caixas_pallet ?? target.caixas_pallet,
+    pallets: toNonNegativeInt(target.pallets, 0) + toNonNegativeInt(palletsDelta, 0),
+    caixasAvulsas:
+      toNonNegativeInt(target.caixas_avulsas, 0) +
+      toNonNegativeInt(caixasAvulsasDelta, 0),
+  });
+  target.caixas_pallet = metrics.caixas_pallet;
+  target.pallets = metrics.pallets;
+  target.caixas_avulsas = metrics.caixas_avulsas;
+  target.total_caixas = metrics.total_caixas;
+}
+
+function formatInventoryStack(pallets, caixasAvulsas) {
+  const palletsCount = toNonNegativeInt(pallets, 0);
+  const looseBoxes = toNonNegativeInt(caixasAvulsas, 0);
+  if (palletsCount && looseBoxes) {
+    return `${palletsCount} + ${looseBoxes}cxs`;
+  }
+  if (palletsCount) {
+    return String(palletsCount);
+  }
+  if (looseBoxes) {
+    return `${looseBoxes}cxs`;
+  }
+  return "";
+}
+
+function formatInventoryMessage(pallets, caixasAvulsas) {
+  const palletsCount = toNonNegativeInt(pallets, 0);
+  const looseBoxes = toNonNegativeInt(caixasAvulsas, 0);
+  const palletLabel = palletsCount === 1 ? "pallet" : "pallets";
+  if (palletsCount && looseBoxes) {
+    return `${palletsCount} ${palletLabel} + ${looseBoxes} cxs`;
+  }
+  if (palletsCount) {
+    return `${palletsCount} ${palletLabel}`;
+  }
+  if (looseBoxes) {
+    return `${looseBoxes} cxs`;
+  }
+  return "0";
+}
+
+function getInventoryRowByIdentity(rows, { setor, produto, marca, tipo }) {
+  return (rows || []).find(
+    (row) =>
+      row?.setor === setor &&
+      row?.produto === produto &&
+      row?.marca === marca &&
+      row?.tipo === tipo
+  );
+}
+
+function buildInventoryPreview({
+  currentRow,
+  caixasPallet,
+  palletsDelta = 0,
+  caixasAvulsasDelta = 0,
+}) {
+  const before = hydrateInventoryRow(
+    currentRow || {
+      caixas_pallet: caixasPallet,
+      pallets: 0,
+      caixas_avulsas: 0,
+      total_caixas: 0,
+    },
+    {
+      caixas_pallet: caixasPallet,
+    }
+  );
+  const after = hydrateInventoryRow(before, {
+    caixas_pallet: caixasPallet,
+    pallets: before.pallets + toNonNegativeInt(palletsDelta, 0),
+    caixas_avulsas: before.caixas_avulsas + toNonNegativeInt(caixasAvulsasDelta, 0),
+  });
+
+  return { before, after };
+}
+
+function buildInventoryResultMessage({
+  successPrefix,
+  successSubject,
+  palletsDelta = 0,
+  caixasAvulsasDelta = 0,
+  before,
+  after,
+  isNewCount = false,
+}) {
+  const base = `${successPrefix}${isNewCount ? " (nova contagem)" : ""}: ${successSubject} ${formatInventoryMessage(
+    palletsDelta,
+    caixasAvulsasDelta
+  )}`.trim();
+  const parts = [base];
+
+  if (after) {
+    parts.push(`Total do item: ${formatInventoryMessage(after.pallets, after.caixas_avulsas)}.`);
+  }
+
+  const convertedPallets =
+    toNonNegativeInt(after?.pallets, 0) -
+    toNonNegativeInt(before?.pallets, 0) -
+    toNonNegativeInt(palletsDelta, 0);
+
+  if (convertedPallets > 0) {
+    const convertedLabel = convertedPallets === 1 ? "pallet" : "pallets";
+    parts.push(
+      `${convertedPallets} ${convertedLabel} vieram das caixas avulsas acumuladas.`
+    );
+  }
+
+  return parts.join(" ");
+}
+
+function hasBoxKeyword(text) {
+  return tokenizeText(text).some((token) => BOX_KEYWORDS.has(token));
+}
+
+function buildDbRowPayload(row, includeUserId = false, forceLooseBoxes = false) {
+  const normalizedRow = hydrateInventoryRow(row);
+  const payload = {
+    setor: normalizedRow.setor,
+    produto: normalizedRow.produto,
+    marca: normalizedRow.marca,
+    tipo: normalizedRow.tipo,
+    caixas_pallet: normalizedRow.caixas_pallet,
+    pallets: normalizedRow.pallets,
+    total_caixas: normalizedRow.total_caixas,
+  };
+
+  if (forceLooseBoxes || normalizedRow.caixas_avulsas > 0) {
+    payload.caixas_avulsas = normalizedRow.caixas_avulsas;
+  }
+  if (includeUserId && normalizedRow.user_id) {
+    payload.user_id = normalizedRow.user_id;
+  }
+
+  return payload;
+}
+
+function isLooseBoxesSchemaError(error) {
+  const message = error?.message || "";
+  return /caixas_avulsas/i.test(message);
+}
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -229,6 +463,7 @@ const elements = {
   editTipo: document.getElementById("edit-tipo"),
   editCaixas: document.getElementById("edit-caixas"),
   editPallets: document.getElementById("edit-pallets"),
+  editLooseBoxes: document.getElementById("edit-loose-boxes"),
   editSave: document.getElementById("edit-save"),
   editMsg: document.getElementById("edit-msg"),
   debugPanel: document.getElementById("debug-panel"),
@@ -254,6 +489,7 @@ const elements = {
   manualMarca: document.getElementById("manual-marca"),
   manualTipo: document.getElementById("manual-tipo"),
   manualPallets: document.getElementById("manual-pallets"),
+  manualBoxes: document.getElementById("manual-boxes"),
   manualAdd: document.getElementById("manual-add"),
   manualTable: document.getElementById("manual-table"),
   manualLabelTipo: document.getElementById("manual-label-tipo"),
@@ -309,6 +545,7 @@ function normalizeText(text) {
     QUILOGRAMA: "KG",
     QUILOGRAMAS: "KG",
     CEP: "CEPI",
+    BRASIL: "BRAZIL",
   };
 
   return tokens.map((token) => tokenMap[token] || token).join(" ").trim();
@@ -617,21 +854,17 @@ function renderContext() {
 function aggregateRows(rows) {
   const map = new Map();
   (rows || []).forEach((row) => {
-    const key = `${row.setor}|||${row.produto}|||${row.marca}|||${row.tipo}`;
+    const normalizedRow = hydrateInventoryRow(row);
+    const key = `${normalizedRow.setor}|||${normalizedRow.produto}|||${normalizedRow.marca}|||${normalizedRow.tipo}`;
     const current = map.get(key);
     if (current) {
-      current.pallets += row.pallets;
-      current.total_caixas += row.total_caixas;
-    } else {
-      map.set(key, {
-        setor: row.setor,
-        produto: row.produto,
-        marca: row.marca,
-        tipo: row.tipo,
-        caixas_pallet: row.caixas_pallet,
-        pallets: row.pallets,
-        total_caixas: row.total_caixas,
+      applyInventoryDeltas(current, {
+        caixas_pallet: normalizedRow.caixas_pallet,
+        palletsDelta: normalizedRow.pallets,
+        caixasAvulsasDelta: normalizedRow.caixas_avulsas,
       });
+    } else {
+      map.set(key, normalizedRow);
     }
   });
   return Array.from(map.values());
@@ -647,10 +880,11 @@ function buildSummaryGroups(rows) {
   const groups = new Map();
   (rows || []).forEach((row) => {
     if (!row) return;
-    const setor = row.setor || "Sem setor";
-    const produto = row.produto || "Sem produto";
-    const marca = row.marca || "Sem marca";
-    const tipo = Number.parseInt(row.tipo, 10);
+    const normalizedRow = hydrateInventoryRow(row);
+    const setor = normalizedRow.setor || "Sem setor";
+    const produto = normalizedRow.produto || "Sem produto";
+    const marca = normalizedRow.marca || "Sem marca";
+    const tipo = Number.parseInt(normalizedRow.tipo, 10);
     if (Number.isNaN(tipo)) return;
     const groupKey = `${setor}|||${produto}`;
     let group = groups.get(groupKey);
@@ -666,11 +900,10 @@ function buildSummaryGroups(rows) {
       groups.set(groupKey, group);
     }
 
-    const pallets = Number(row.pallets) || 0;
-    const caixasPallet = Number(row.caixas_pallet);
-    const totalCaixas =
-      Number(row.total_caixas) ||
-      pallets * (Number(row.caixas_pallet) || 0);
+    const pallets = normalizedRow.pallets;
+    const caixasPallet = normalizedRow.caixas_pallet;
+    const caixasAvulsas = normalizedRow.caixas_avulsas;
+    const totalCaixas = normalizedRow.total_caixas;
 
     group.brands.add(marca);
     group.tipos.add(tipo);
@@ -681,18 +914,21 @@ function buildSummaryGroups(rows) {
     const brandMap = group.matrix.get(tipo);
     const cell = brandMap.get(marca) || {
       pallets: 0,
+      caixas_avulsas: 0,
       total_caixas: 0,
       caixas_pallet: null,
     };
     if (Number.isFinite(caixasPallet) && caixasPallet > 0) {
       cell.caixas_pallet = caixasPallet;
     }
-    cell.pallets += pallets;
-    cell.total_caixas += totalCaixas;
+    applyInventoryDeltas(cell, {
+      caixas_pallet: caixasPallet,
+      palletsDelta: pallets,
+      caixasAvulsasDelta: caixasAvulsas,
+    });
     brandMap.set(marca, cell);
 
-    const total = group.totals.get(marca) || { pallets: 0, total_caixas: 0 };
-    total.pallets += pallets;
+    const total = group.totals.get(marca) || { total_caixas: 0 };
     total.total_caixas += totalCaixas;
     group.totals.set(marca, total);
   });
@@ -766,7 +1002,7 @@ function renderSummaryTables(rows, container, options = {}) {
       const thCaixas = document.createElement("th");
       thCaixas.textContent = "Cx/P";
       const thPallets = document.createElement("th");
-      thPallets.textContent = "P";
+      thPallets.textContent = "P + Av";
       const thTotal = document.createElement("th");
       thTotal.textContent = "T";
       headRow2.append(thCaixas, thPallets, thTotal);
@@ -785,12 +1021,13 @@ function renderSummaryTables(rows, container, options = {}) {
         const cell = group.matrix.get(tipo)?.get(brand);
         const caixasPallet = cell?.caixas_pallet ?? 0;
         const pallets = cell?.pallets || 0;
+        const caixasAvulsas = cell?.caixas_avulsas || 0;
         const total = cell?.total_caixas || 0;
         const caixasCell = document.createElement("td");
         caixasCell.textContent = formatSummaryValue(caixasPallet);
         caixasCell.className = "cell-caixas";
         const palletsCell = document.createElement("td");
-        palletsCell.textContent = formatSummaryValue(pallets);
+        palletsCell.textContent = formatInventoryStack(pallets, caixasAvulsas);
         palletsCell.className = "cell-pallets";
         const totalCell = document.createElement("td");
         totalCell.textContent = formatSummaryValue(total);
@@ -1431,18 +1668,23 @@ function renderPublicTable() {
   let total = 0;
   const rows = state.publicRows.filter(matchesPublicFilters);
   for (const row of rows) {
-    const tipoLabel = formatTipoLabelValue(row.produto, row.tipo);
+    const normalizedRow = hydrateInventoryRow(row);
+    const tipoLabel = formatTipoLabelValue(
+      normalizedRow.produto,
+      normalizedRow.tipo
+    );
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${row.produto}</td>
-      <td>${row.marca}</td>
+      <td>${normalizedRow.produto}</td>
+      <td>${normalizedRow.marca}</td>
       <td>${tipoLabel}</td>
-      <td>${row.caixas_pallet}</td>
-      <td>${row.pallets}</td>
-      <td>${row.total_caixas}</td>
+      <td>${normalizedRow.caixas_pallet}</td>
+      <td>${normalizedRow.pallets}</td>
+      <td>${normalizedRow.caixas_avulsas || ""}</td>
+      <td>${normalizedRow.total_caixas}</td>
     `;
     elements.publicTableBody.appendChild(tr);
-    total += row.total_caixas;
+    total += normalizedRow.total_caixas;
   }
   elements.publicTotalGeral.textContent = total;
   renderPublicSummary();
@@ -1474,9 +1716,10 @@ function renderCountTable() {
   const showActions = PAGE_MODE === "edit";
   const rows = getCountRowsForSetor();
   for (const row of rows) {
-    const tipoLabel = formatTipoLabelValue(row.produto, row.tipo);
+    const normalizedRow = hydrateInventoryRow(row);
+    const tipoLabel = formatTipoLabelValue(normalizedRow.produto, normalizedRow.tipo);
     const tr = document.createElement("tr");
-    const rowKey = getRowKey(row);
+    const rowKey = getRowKey(normalizedRow);
     if (rowKey) {
       tr.dataset.rowKey = rowKey;
       if (state.selectedRowKey === rowKey) {
@@ -1488,15 +1731,14 @@ function renderCountTable() {
         renderCountTable();
       });
     }
-    const totalCaixas = Number(
-      row.total_caixas ?? row.pallets * row.caixas_pallet
-    );
+    const totalCaixas = normalizedRow.total_caixas;
     tr.innerHTML = `
-      <td>${row.produto}</td>
-      <td>${row.marca}</td>
+      <td>${normalizedRow.produto}</td>
+      <td>${normalizedRow.marca}</td>
       <td>${tipoLabel}</td>
-      <td>${row.caixas_pallet}</td>
-      <td>${row.pallets}</td>
+      <td>${normalizedRow.caixas_pallet}</td>
+      <td>${normalizedRow.pallets}</td>
+      <td>${normalizedRow.caixas_avulsas || ""}</td>
       <td>${totalCaixas}</td>
     `;
     if (showActions) {
@@ -1538,6 +1780,7 @@ function updateAggregateRecord({
   tipo,
   caixas_pallet,
   palletsDelta = 1,
+  caixasAvulsasDelta = 0,
 }) {
   const found = state.publicRows.find(
     (row) =>
@@ -1547,27 +1790,28 @@ function updateAggregateRecord({
       row.tipo === tipo
   );
   if (found) {
-    found.pallets += palletsDelta;
-    found.total_caixas = found.pallets * found.caixas_pallet;
+    applyInventoryDeltas(found, {
+      caixas_pallet,
+      palletsDelta,
+      caixasAvulsasDelta,
+    });
   } else {
-    state.publicRows.push({
+    state.publicRows.push(hydrateInventoryRow({
       setor,
       produto,
       marca,
       tipo,
       caixas_pallet,
       pallets: palletsDelta,
-      total_caixas: caixas_pallet * palletsDelta,
-    });
+      caixas_avulsas: caixasAvulsasDelta,
+    }));
   }
 }
 
 function getTotalCaixas(rows) {
   return (rows || []).reduce((sum, row) => {
-    const value =
-      Number(row.total_caixas) ||
-      (Number(row.pallets) || 0) * (Number(row.caixas_pallet) || 0);
-    return sum + (Number.isFinite(value) ? value : 0);
+    const normalizedRow = hydrateInventoryRow(row);
+    return sum + normalizedRow.total_caixas;
   }, 0);
 }
 
@@ -1618,9 +1862,7 @@ async function saveSnapshotTotal() {
 async function loadPublicRecords() {
   const { data, error } = await supabaseClient
     .from(TABLE_NAME)
-    .select(
-      "setor, produto, marca, tipo, caixas_pallet, pallets, total_caixas, updated_at, user_id"
-    );
+    .select("*");
 
   if (error) {
     const cached = loadPublicCache();
@@ -1666,9 +1908,7 @@ async function loadUserRecords(options = {}) {
   }
   const { data, error } = await supabaseClient
     .from(TABLE_NAME)
-    .select(
-      "id, user_id, setor, produto, marca, tipo, caixas_pallet, pallets, total_caixas, updated_at"
-    )
+    .select("*")
     .eq("user_id", state.user.id);
 
   if (error) {
@@ -1678,7 +1918,7 @@ async function loadUserRecords(options = {}) {
     return { data: null, error };
   }
 
-  state.userRows = data || [];
+  state.userRows = (data || []).map((row) => hydrateInventoryRow(row));
   updateLastUpdateFromRows(state.userRows, "count");
   renderCountTable();
   return { data: state.userRows, error: null };
@@ -1691,11 +1931,12 @@ async function upsertRecord({
   tipo,
   caixas_pallet,
   palletsDelta = 1,
+  caixasAvulsasDelta = 0,
 }) {
   if (!state.user) return;
   const { data: existing, error: selectError } = await supabaseClient
     .from(TABLE_NAME)
-    .select("id, pallets, caixas_pallet")
+    .select("*")
     .eq("user_id", state.user.id)
     .eq("setor", setor)
     .eq("produto", produto)
@@ -1709,21 +1950,33 @@ async function upsertRecord({
   }
 
   if (existing) {
-    const newPallets = existing.pallets + palletsDelta;
-    const newTotal = newPallets * existing.caixas_pallet;
+    const current = hydrateInventoryRow(existing);
+    const updated = hydrateInventoryRow(current, {
+      caixas_pallet: caixas_pallet ?? current.caixas_pallet,
+      pallets: current.pallets + toNonNegativeInt(palletsDelta, 0),
+      caixas_avulsas:
+        current.caixas_avulsas + toNonNegativeInt(caixasAvulsasDelta, 0),
+    });
+    const payload = buildDbRowPayload(
+      updated,
+      false,
+      Object.prototype.hasOwnProperty.call(existing || {}, "caixas_avulsas") ||
+        updated.caixas_avulsas > 0 ||
+        toNonNegativeInt(caixasAvulsasDelta, 0) > 0
+    );
     const { error } = await supabaseClient
       .from(TABLE_NAME)
-      .update({
-        pallets: newPallets,
-        total_caixas: newTotal,
-      })
+      .update(payload)
       .eq("id", existing.id);
 
     if (error) {
-      pushMessage("error", `Erro ao atualizar registro: ${error.message}`);
+      const message = isLooseBoxesSchemaError(error)
+        ? "Erro ao atualizar registro: rode a migracao de caixas avulsas no Supabase."
+        : `Erro ao atualizar registro: ${error.message}`;
+      pushMessage("error", message);
     }
   } else {
-    const { error } = await supabaseClient.from(TABLE_NAME).insert({
+    const newRow = hydrateInventoryRow({
       user_id: state.user.id,
       setor,
       produto,
@@ -1731,11 +1984,17 @@ async function upsertRecord({
       tipo,
       caixas_pallet,
       pallets: palletsDelta,
-      total_caixas: caixas_pallet * palletsDelta,
+      caixas_avulsas: caixasAvulsasDelta,
     });
+    const { error } = await supabaseClient
+      .from(TABLE_NAME)
+      .insert(buildDbRowPayload(newRow, true));
 
     if (error) {
-      pushMessage("error", `Erro ao salvar registro: ${error.message}`);
+      const message = isLooseBoxesSchemaError(error)
+        ? "Erro ao salvar registro: rode a migracao de caixas avulsas no Supabase."
+        : `Erro ao salvar registro: ${error.message}`;
+      pushMessage("error", message);
     }
   }
 }
@@ -1763,6 +2022,82 @@ function formatTipoCounts(tipoCounts) {
     .sort((a, b) => a[0] - b[0])
     .map(([tipo, count]) => (count > 1 ? `${tipo}x${count}` : String(tipo)))
     .join(", ");
+}
+
+async function registerInventoryChange({
+  setor,
+  produto,
+  marca,
+  tipo,
+  caixasPallet,
+  palletsDelta = 0,
+  caixasAvulsasDelta = 0,
+  successPrefix = "Registrado",
+  successSubject = "",
+}) {
+  const sourceRows =
+    state.countMode === "new" ? state.sessionRows : state.userRows;
+  const currentRow = getInventoryRowByIdentity(sourceRows, {
+    setor,
+    produto,
+    marca,
+    tipo,
+  });
+  const { before, after } = buildInventoryPreview({
+    currentRow,
+    caixasPallet,
+    palletsDelta,
+    caixasAvulsasDelta,
+  });
+  const successMessage = buildInventoryResultMessage({
+    successPrefix,
+    successSubject,
+    palletsDelta,
+    caixasAvulsasDelta,
+    before,
+    after,
+    isNewCount: state.countMode === "new",
+  });
+
+  if (state.countMode === "new") {
+    updateSessionAggregateRecord({
+      setor,
+      produto,
+      marca,
+      tipo,
+      caixas_pallet: caixasPallet,
+      palletsDelta,
+      caixasAvulsasDelta,
+    });
+    renderCountTable();
+    pushMessage("success", successMessage);
+    return;
+  }
+
+  updateAggregateRecord({
+    setor,
+    produto,
+    marca,
+    tipo,
+    caixas_pallet: caixasPallet,
+    palletsDelta,
+    caixasAvulsasDelta,
+  });
+  renderPublicTable();
+  renderCountTable();
+  pushMessage("success", successMessage);
+
+  await upsertRecord({
+    setor,
+    produto,
+    marca,
+    tipo,
+    caixas_pallet: caixasPallet,
+    palletsDelta,
+    caixasAvulsasDelta,
+  });
+  await loadUserRecords();
+  await loadPublicRecords();
 }
 
 async function processCommand(rawText) {
@@ -1813,21 +2148,24 @@ async function processCommand(rawText) {
     }
   }
 
-  const tipos = extractNumbers(rawText);
+  const numericValues = extractNumbers(rawText)
+    .map((value) => Number.parseInt(value, 10))
+    .filter((value) => Number.isFinite(value) && value > 0);
   const noTipo = isNoTipoProduct(state.produto);
   const addCommand = isAddCommand(rawText);
+  const boxCommand = hasBoxKeyword(rawText);
 
-  if (addCommand && !tipos.length) {
-    pushMessage("warn", "Diga a quantidade para adicionar.");
+  if (boxCommand && !numericValues.length) {
+    pushMessage("warn", "Diga a quantidade de caixas.");
     renderContext();
     return;
   }
 
-  if (addCommand && tipos.length) {
+  if (boxCommand) {
     if (!state.produto || !state.marca) {
       pushMessage(
         "warn",
-        "Diga primeiro o produto e a marca antes de adicionar quantidade."
+        "Diga primeiro o produto e a marca antes de adicionar caixas."
       );
       renderContext();
       return;
@@ -1843,11 +2181,72 @@ async function processCommand(rawText) {
       return;
     }
 
-    const numericValues = tipos
-      .map((value) => Number.parseInt(value, 10))
-      .filter((value) => Number.isFinite(value) && value > 0);
+    let tipoParaAdicionar = noTipo ? NO_TIPO_VALUE : state.tipo;
 
-    if (!numericValues.length) {
+    if (!noTipo && numericValues.length >= 2) {
+      const candidateTipo = numericValues[0];
+      if (isTipoValid(candidateTipo)) {
+        tipoParaAdicionar = candidateTipo;
+        state.tipo = candidateTipo;
+      }
+    }
+
+    if (!noTipo && !Number.isFinite(tipoParaAdicionar)) {
+      pushMessage(
+        "warn",
+        "Diga o tipo primeiro (ex: REI 4) para somar caixas avulsas."
+      );
+      renderContext();
+      return;
+    }
+    if (!noTipo && !isTipoValid(tipoParaAdicionar)) {
+      pushMessage("warn", "Tipo deve estar entre 3 e 15.");
+      renderContext();
+      return;
+    }
+
+    const caixasAvulsasDelta = numericValues[numericValues.length - 1];
+    const caixasPallet = regra(tipoParaAdicionar);
+
+    await registerInventoryChange({
+      setor: state.setor,
+      produto: state.produto,
+      marca: state.marca,
+      tipo: tipoParaAdicionar,
+      caixasPallet,
+      caixasAvulsasDelta,
+      successPrefix: "Registrado",
+      successSubject: noTipo
+        ? `${state.produto} ${state.marca}`
+        : `${state.produto} ${state.marca} Tipo ${tipoParaAdicionar}`,
+    });
+
+    renderContext();
+    return;
+  }
+
+  if (addCommand && !numericValues.length) {
+    pushMessage("warn", "Diga a quantidade para adicionar.");
+    renderContext();
+    return;
+  }
+
+  if (addCommand && numericValues.length) {
+    if (!state.produto || !state.marca) {
+      pushMessage(
+        "warn",
+        "Diga primeiro o produto e a marca antes de adicionar quantidade."
+      );
+      renderContext();
+      return;
+    }
+
+    const regra = products[state.produto]?.[state.marca];
+    if (!regra) {
+      pushMessage(
+        "error",
+        `Essa marca '${state.marca}' nao tem regra para o produto '${state.produto}'.`
+      );
       renderContext();
       return;
     }
@@ -1880,122 +2279,57 @@ async function processCommand(rawText) {
     const caixasPallet = regra(tipoParaAdicionar);
     const palletsDelta = quantity;
 
-    if (state.countMode === "new") {
-      updateSessionAggregateRecord({
-        setor: state.setor,
-        produto: state.produto,
-        marca: state.marca,
-        tipo: tipoParaAdicionar,
-        caixas_pallet: caixasPallet,
-        palletsDelta,
-      });
-      renderCountTable();
-      pushMessage(
-        "success",
-        noTipo
-          ? `Adicionado (nova contagem): ${state.produto} ${state.marca} Pallets ${palletsDelta}`
-          : `Adicionado (nova contagem): ${state.produto} ${state.marca} Tipo ${tipoParaAdicionar} +${palletsDelta}`
-      );
-    } else {
-      updateAggregateRecord({
-        setor: state.setor,
-        produto: state.produto,
-        marca: state.marca,
-        tipo: tipoParaAdicionar,
-        caixas_pallet: caixasPallet,
-        palletsDelta,
-      });
-      renderPublicTable();
-      renderCountTable();
-      pushMessage(
-        "success",
-        noTipo
-          ? `Adicionado: ${state.produto} ${state.marca} Pallets ${palletsDelta}`
-          : `Adicionado: ${state.produto} ${state.marca} Tipo ${tipoParaAdicionar} +${palletsDelta}`
-      );
-
-      await upsertRecord({
-        setor: state.setor,
-        produto: state.produto,
-        marca: state.marca,
-        tipo: tipoParaAdicionar,
-        caixas_pallet: caixasPallet,
-        palletsDelta,
-      });
-      await loadUserRecords();
-      await loadPublicRecords();
-    }
+    await registerInventoryChange({
+      setor: state.setor,
+      produto: state.produto,
+      marca: state.marca,
+      tipo: tipoParaAdicionar,
+      caixasPallet,
+      palletsDelta,
+      successPrefix: "Adicionado",
+      successSubject: noTipo
+        ? `${state.produto} ${state.marca}`
+        : `${state.produto} ${state.marca} Tipo ${tipoParaAdicionar}`,
+    });
 
     renderContext();
     return;
   }
 
-  if (noTipo && brandFound && !tipos.length) {
+  if (noTipo && brandFound && !numericValues.length) {
     const regra = products[state.produto]?.[state.marca];
     if (!regra) {
       pushMessage(
         "error",
-        `Essa marca '${state.marca}' n?o tem regra para o produto '${state.produto}'.`
+        `Essa marca '${state.marca}' nao tem regra para o produto '${state.produto}'.`
       );
       renderContext();
       return;
     }
 
     const caixasPallet = regra(NO_TIPO_VALUE);
-    const palletsDelta = 1;
     state.tipo = NO_TIPO_VALUE;
 
-    if (state.countMode === "new") {
-      updateSessionAggregateRecord({
-        setor: state.setor,
-        produto: state.produto,
-        marca: state.marca,
-        tipo: NO_TIPO_VALUE,
-        caixas_pallet: caixasPallet,
-        palletsDelta,
-      });
-      renderCountTable();
-      pushMessage(
-        "success",
-        `Registrado (nova contagem): ${state.produto} ${state.marca} Pallets ${palletsDelta}`
-      );
-    } else {
-      updateAggregateRecord({
-        setor: state.setor,
-        produto: state.produto,
-        marca: state.marca,
-        tipo: NO_TIPO_VALUE,
-        caixas_pallet: caixasPallet,
-        palletsDelta,
-      });
-      renderPublicTable();
-      renderCountTable();
-      pushMessage(
-        "success",
-        `Registrado: ${state.produto} ${state.marca} Pallets ${palletsDelta}`
-      );
-
-      await upsertRecord({
-        setor: state.setor,
-        produto: state.produto,
-        marca: state.marca,
-        tipo: NO_TIPO_VALUE,
-        caixas_pallet: caixasPallet,
-        palletsDelta,
-      });
-      await loadUserRecords();
-      await loadPublicRecords();
-    }
+    await registerInventoryChange({
+      setor: state.setor,
+      produto: state.produto,
+      marca: state.marca,
+      tipo: NO_TIPO_VALUE,
+      caixasPallet,
+      palletsDelta: 1,
+      successPrefix: "Registrado",
+      successSubject: `${state.produto} ${state.marca}`,
+    });
 
     renderContext();
     return;
   }
 
-  if (tipos.length) {
+  if (numericValues.length) {
     if (!state.produto || !state.marca) {
       pushMessage(
         "warn",
-        "Diga primeiro o produto e a marca antes de informar o n?mero."
+        "Diga primeiro o produto e a marca antes de informar o numero."
       );
       renderContext();
       return;
@@ -2005,17 +2339,14 @@ async function processCommand(rawText) {
     if (!regra) {
       pushMessage(
         "error",
-        `Essa marca '${state.marca}' n?o tem regra para o produto '${state.produto}'.`
+        `Essa marca '${state.marca}' nao tem regra para o produto '${state.produto}'.`
       );
       renderContext();
       return;
     }
 
     if (noTipo) {
-      const palletsTotal = tipos
-        .map((value) => Number.parseInt(value, 10))
-        .filter((value) => Number.isFinite(value) && value > 0)
-        .reduce((acc, value) => acc + value, 0);
+      const palletsTotal = numericValues.reduce((acc, value) => acc + value, 0);
 
       if (!palletsTotal) {
         renderContext();
@@ -2025,55 +2356,22 @@ async function processCommand(rawText) {
       const caixasPallet = regra(NO_TIPO_VALUE);
       state.tipo = NO_TIPO_VALUE;
 
-      if (state.countMode === "new") {
-        updateSessionAggregateRecord({
-          setor: state.setor,
-          produto: state.produto,
-          marca: state.marca,
-          tipo: NO_TIPO_VALUE,
-          caixas_pallet: caixasPallet,
-          palletsDelta: palletsTotal,
-        });
-        renderCountTable();
-        pushMessage(
-          "success",
-          `Registrado (nova contagem): ${state.produto} ${state.marca} Pallets ${palletsTotal}`
-        );
-      } else {
-        updateAggregateRecord({
-          setor: state.setor,
-          produto: state.produto,
-          marca: state.marca,
-          tipo: NO_TIPO_VALUE,
-          caixas_pallet: caixasPallet,
-          palletsDelta: palletsTotal,
-        });
-        renderPublicTable();
-        renderCountTable();
-        pushMessage(
-          "success",
-          `Registrado: ${state.produto} ${state.marca} Pallets ${palletsTotal}`
-        );
-
-        await upsertRecord({
-          setor: state.setor,
-          produto: state.produto,
-          marca: state.marca,
-          tipo: NO_TIPO_VALUE,
-          caixas_pallet: caixasPallet,
-          palletsDelta: palletsTotal,
-        });
-        await loadUserRecords();
-        await loadPublicRecords();
-      }
+      await registerInventoryChange({
+        setor: state.setor,
+        produto: state.produto,
+        marca: state.marca,
+        tipo: NO_TIPO_VALUE,
+        caixasPallet,
+        palletsDelta: palletsTotal,
+        successPrefix: "Registrado",
+        successSubject: `${state.produto} ${state.marca}`,
+      });
 
       renderContext();
       return;
     }
 
-    const tiposValid = tipos
-      .map((value) => Number.parseInt(value, 10))
-      .filter((value) => Number.isFinite(value) && isTipoValid(value));
+    const tiposValid = numericValues.filter((value) => isTipoValid(value));
 
     if (!tiposValid.length) {
       pushMessage("warn", "Tipo deve estar entre 3 e 15.");
@@ -2280,22 +2578,27 @@ function exportRows(rows, filename) {
     "Tipo",
     "Caixas/Pallet",
     "Pallets",
+    "Caixas Avulsas",
     "Total Caixas",
   ];
   const csv = [
     header.join(";"),
     ...rows.map((row) =>
-      [
-        row.setor,
-        row.produto,
-        row.marca,
-        row.tipo,
-        row.caixas_pallet,
-        row.pallets,
-        row.total_caixas,
-      ].join(";")
+      {
+        const normalizedRow = hydrateInventoryRow(row);
+        return [
+          normalizedRow.setor,
+          normalizedRow.produto,
+          normalizedRow.marca,
+          normalizedRow.tipo,
+          normalizedRow.caixas_pallet,
+          normalizedRow.pallets,
+          normalizedRow.caixas_avulsas,
+          normalizedRow.total_caixas,
+        ].join(";");
+      }
     ),
-  ].join("");
+  ].join("\n");
 
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -2478,6 +2781,7 @@ function updateSessionAggregateRecord({
   tipo,
   caixas_pallet,
   palletsDelta = 1,
+  caixasAvulsasDelta = 0,
 }) {
   const found = state.sessionRows.find(
     (row) =>
@@ -2487,10 +2791,13 @@ function updateSessionAggregateRecord({
       row.tipo === tipo
   );
   if (found) {
-    found.pallets += palletsDelta;
-    found.total_caixas = found.pallets * found.caixas_pallet;
+    applyInventoryDeltas(found, {
+      caixas_pallet,
+      palletsDelta,
+      caixasAvulsasDelta,
+    });
   } else {
-    state.sessionRows.push({
+    state.sessionRows.push(hydrateInventoryRow({
       _localId: `local_${Date.now()}_${Math.random().toString(16).slice(2)}`,
       setor,
       produto,
@@ -2498,8 +2805,8 @@ function updateSessionAggregateRecord({
       tipo,
       caixas_pallet,
       pallets: palletsDelta,
-      total_caixas: caixas_pallet * palletsDelta,
-    });
+      caixas_avulsas: caixasAvulsasDelta,
+    }));
   }
 }
 
@@ -2646,6 +2953,9 @@ function openEditModal(row = null) {
   if (elements.editPallets) {
     elements.editPallets.value = row?.pallets ?? 1;
   }
+  if (elements.editLooseBoxes) {
+    elements.editLooseBoxes.value = row?.caixas_avulsas ?? 0;
+  }
 
   elements.editModal.classList.remove("hidden");
 }
@@ -2695,6 +3005,7 @@ async function saveEditItem() {
     const tipo = Number.parseInt(elements.editTipo.value, 10);
     const caixasPallet = Number.parseInt(elements.editCaixas.value, 10);
     const pallets = Number.parseInt(elements.editPallets.value, 10);
+    const caixasAvulsas = toNonNegativeInt(elements.editLooseBoxes?.value, 0);
     const noTipo = isNoTipoProduct(produto);
 
     const info = getProdutoMarcaInfo(produto, marca);
@@ -2751,13 +3062,25 @@ async function saveEditItem() {
       );
       return;
     }
+    if (pallets < 0 || caixasAvulsas < 0) {
+      setEditMessage("error", "Pallets e caixas avulsas nao podem ser negativos.");
+      return;
+    }
+    if (pallets === 0 && caixasAvulsas === 0) {
+      setEditMessage("error", "Informe pallets ou caixas avulsas.");
+      return;
+    }
     if (!noTipo && !isTipoValid(tipo)) {
       setEditMessage("error", "Tipo deve estar entre 3 e 15.");
       return;
     }
 
     const tipoFinal = noTipo ? NO_TIPO_VALUE : tipo;
-    const totalCaixas = caixasPallet * pallets;
+    const normalizedMetrics = normalizeInventoryMetrics({
+      caixasPallet,
+      pallets,
+      caixasAvulsas,
+    });
 
     if (state.countMode === "new") {
       if (!state.editTarget?.rowKey) {
@@ -2773,9 +3096,10 @@ async function saveEditItem() {
       row.produto = produto;
       row.marca = marca;
       row.tipo = tipoFinal;
-      row.caixas_pallet = caixasPallet;
-      row.pallets = pallets;
-      row.total_caixas = totalCaixas;
+      row.caixas_pallet = normalizedMetrics.caixas_pallet;
+      row.pallets = normalizedMetrics.pallets;
+      row.caixas_avulsas = normalizedMetrics.caixas_avulsas;
+      row.total_caixas = normalizedMetrics.total_caixas;
       if (setor && state.setor !== setor) {
         state.setor = setor;
         if (elements.setorSelect) elements.setorSelect.value = setor;
@@ -2798,26 +3122,41 @@ async function saveEditItem() {
       produto,
       marca,
       tipo: tipoFinal,
-      caixas_pallet: caixasPallet,
-      pallets,
-      total_caixas: totalCaixas,
+      caixas_pallet: normalizedMetrics.caixas_pallet,
+      pallets: normalizedMetrics.pallets,
+      total_caixas: normalizedMetrics.total_caixas,
     };
+    if (normalizedMetrics.caixas_avulsas > 0) {
+      payload.caixas_avulsas = normalizedMetrics.caixas_avulsas;
+    }
 
     if (!state.editTarget?.rowKey) {
       setEditMessage("error", "Selecione um item para editar.");
       return;
     }
+    const originalRow = findCurrentRowByKey(state.editTarget.rowKey);
+    const hasLooseBoxesColumn =
+      Object.prototype.hasOwnProperty.call(originalRow || {}, "caixas_avulsas") ||
+      normalizedMetrics.caixas_avulsas > 0;
     const updateResult = await withTimeout(
       supabaseClient
         .from(TABLE_NAME)
-        .update(payload)
+        .update({
+          ...payload,
+          ...(hasLooseBoxesColumn
+            ? { caixas_avulsas: normalizedMetrics.caixas_avulsas }
+            : {}),
+        })
         .eq("id", state.editTarget.rowKey)
         .eq("user_id", state.user.id),
       SUPABASE_TIMEOUT_MS,
       "Tempo limite ao atualizar item."
     );
     if (updateResult?.error) {
-      setEditMessage("error", `Erro ao atualizar item: ${updateResult.error.message}`);
+      const message = isLooseBoxesSchemaError(updateResult.error)
+        ? "Erro ao atualizar item: rode a migracao de caixas avulsas no Supabase."
+        : `Erro ao atualizar item: ${updateResult.error.message}`;
+      setEditMessage("error", message);
       showDebugPanel(updateResult);
       clearTimeout(slowTimer);
       return;
@@ -2988,22 +3327,25 @@ async function saveNewCount() {
     return;
   }
 
-  const payload = state.sessionRows.map((row) => ({
-    user_id: state.user.id,
-    setor: row.setor,
-    produto: row.produto,
-    marca: row.marca,
-    tipo: row.tipo,
-    caixas_pallet: row.caixas_pallet,
-    pallets: row.pallets,
-    total_caixas: row.total_caixas,
-  }));
+  const payload = state.sessionRows.map((row) =>
+    buildDbRowPayload(
+      {
+        ...row,
+        user_id: state.user.id,
+      },
+      true,
+      row.caixas_avulsas > 0
+    )
+  );
 
   const { error: insertError } = await supabaseClient
     .from(TABLE_NAME)
     .insert(payload);
   if (insertError) {
-    pushMessage("error", `Erro ao salvar nova contagem: ${insertError.message}`);
+    const message = isLooseBoxesSchemaError(insertError)
+      ? "Erro ao salvar nova contagem: rode a migracao de caixas avulsas no Supabase."
+      : `Erro ao salvar nova contagem: ${insertError.message}`;
+    pushMessage("error", message);
     return;
   }
 
@@ -3106,6 +3448,7 @@ function updateManualTipoOptions() {
     option.textContent = "S/T";
     elements.manualTipo.appendChild(option);
     elements.manualTipo.disabled = true;
+    updateManualBoxesOptions();
     return;
   }
   elements.manualTipo.disabled = false;
@@ -3116,6 +3459,36 @@ function updateManualTipoOptions() {
     elements.manualTipo.value,
     "Selecione"
   );
+  updateManualBoxesOptions();
+}
+
+function getManualCaixasPallet() {
+  const setor = elements.manualSetor?.value;
+  const produto = elements.manualProduto?.value;
+  const marca = elements.manualMarca?.value;
+  if (!setor || !produto || !marca) return 0;
+  const regra = CONFIG_GERAL[setor]?.[produto]?.[marca];
+  if (!regra) return 0;
+  const noTipo = isNoTipoProduct(produto);
+  const tipo = noTipo
+    ? NO_TIPO_VALUE
+    : Number.parseInt(elements.manualTipo?.value, 10);
+  if (!noTipo && !isTipoValid(tipo)) return 0;
+  return toNonNegativeInt(regra(tipo), 0);
+}
+
+function updateManualBoxesOptions() {
+  if (!elements.manualBoxes) return;
+  const caixasPallet = getManualCaixasPallet();
+  elements.manualBoxes.min = "0";
+  elements.manualBoxes.step = "1";
+  elements.manualBoxes.placeholder = "0";
+  elements.manualBoxes.title = caixasPallet
+    ? `${caixasPallet} caixas fecham 1 pallet.`
+    : "Digite a quantidade de caixas avulsas.";
+  if (elements.manualBoxes.value === "") {
+    elements.manualBoxes.value = "0";
+  }
 }
 
 function listProductsBySetor(setor) {
@@ -3152,7 +3525,8 @@ function initManualForm() {
     !elements.manualProduto ||
     !elements.manualMarca ||
     !elements.manualTipo ||
-    !elements.manualPallets
+    !elements.manualPallets ||
+    !elements.manualBoxes
   ) {
     return;
   }
@@ -3177,7 +3551,8 @@ function initManualForm() {
     "Selecione"
   );
   updateManualTipoOptions();
-  setNumberOptions(elements.manualPallets, 1, 50, 1);
+  setNumberOptions(elements.manualPallets, 0, 50, 0);
+  updateManualBoxesOptions();
 }
 
 function updateManualDependencies() {
@@ -3201,6 +3576,7 @@ function updateManualDependencies() {
     "Selecione"
   );
   updateManualTipoOptions();
+  updateManualBoxesOptions();
 }
 
 async function addManualItem() {
@@ -3217,7 +3593,8 @@ async function addManualItem() {
   const produto = elements.manualProduto.value;
   const marca = elements.manualMarca.value;
   const tipoInput = Number.parseInt(elements.manualTipo.value, 10);
-  const pallets = Number.parseInt(elements.manualPallets?.value, 10) || 1;
+  const pallets = toNonNegativeInt(elements.manualPallets?.value, 0);
+  const caixasAvulsas = toNonNegativeInt(elements.manualBoxes?.value, 0);
   const noTipo = isNoTipoProduct(produto);
 
   if (!setor || !produto || !marca) {
@@ -3234,8 +3611,8 @@ async function addManualItem() {
     return;
   }
 
-  if (pallets <= 0) {
-    pushMessage("warn", "Informe uma quantidade de pallets válida.");
+  if (pallets <= 0 && caixasAvulsas <= 0) {
+    pushMessage("warn", "Informe pallets ou caixas avulsas.");
     return;
   }
 
@@ -3257,52 +3634,26 @@ async function addManualItem() {
   }
   renderContext();
 
-  if (state.countMode === "new") {
-    updateSessionAggregateRecord({
-      setor,
-      produto,
-      marca,
-      tipo: tipoFinal,
-      caixas_pallet: caixasPallet,
-      palletsDelta,
-    });
-    renderCountTable();
-    pushMessage(
-      "success",
-      noTipo
-        ? `Registrado (nova contagem): ${produto} ${marca} Pallets ${palletsDelta}`
-        : `Registrado (nova contagem): ${produto} ${marca} Tipo ${tipo}`
-    );
-    return;
+  await registerInventoryChange({
+    setor,
+    produto,
+    marca,
+    tipo,
+    caixasPallet,
+    palletsDelta,
+    caixasAvulsasDelta: caixasAvulsas,
+    successPrefix: "Registrado",
+    successSubject: noTipo
+      ? `${produto} ${marca}`
+      : `${produto} ${marca} Tipo ${tipo}`,
+  });
+
+  if (elements.manualPallets) {
+    elements.manualPallets.value = "0";
   }
-
-  updateAggregateRecord({
-    setor,
-    produto,
-    marca,
-    tipo,
-    caixas_pallet: caixasPallet,
-    palletsDelta,
-  });
-  renderPublicTable();
-  renderCountTable();
-  pushMessage(
-    "success",
-    noTipo
-      ? `Registrado: ${produto} ${marca} Pallets ${palletsDelta}`
-      : `Registrado: ${produto} ${marca} Tipo ${tipo}`
-  );
-
-  await upsertRecord({
-    setor,
-    produto,
-    marca,
-    tipo,
-    caixas_pallet: caixasPallet,
-    palletsDelta,
-  });
-  await loadUserRecords();
-  await loadPublicRecords();
+  if (elements.manualBoxes) {
+    elements.manualBoxes.value = "0";
+  }
 }
 
 function buildFilterOptions() {
@@ -3603,6 +3954,18 @@ function setupEvents() {
   if (elements.manualProduto) {
     elements.manualProduto.addEventListener("change", () => {
       updateManualDependencies();
+    });
+  }
+
+  if (elements.manualMarca) {
+    elements.manualMarca.addEventListener("change", () => {
+      updateManualBoxesOptions();
+    });
+  }
+
+  if (elements.manualTipo) {
+    elements.manualTipo.addEventListener("change", () => {
+      updateManualBoxesOptions();
     });
   }
 

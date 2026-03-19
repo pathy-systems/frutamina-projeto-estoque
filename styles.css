@@ -490,7 +490,12 @@ table {
 }
 
 table.manual-table select {
-  min-width: 140px;
+  min-width: 120px;
+}
+
+table.manual-table input {
+  min-width: 120px;
+  width: 100%;
 }
 
 table.manual-table td:last-child {
