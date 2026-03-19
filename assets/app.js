@@ -2356,10 +2356,12 @@ function openPrintWindow(title, contentNode) {
   };
 
   window.onafterprint = cleanup;
+  // Forca o navegador a renderizar o conteudo antes do print
+  void printArea.offsetHeight;
   try {
     window.print();
   } finally {
-    setTimeout(cleanup, 2000);
+    // Se o navegador nao disparar onafterprint, o proximo print limpa o conteudo.
   }
 }
 
