@@ -2338,31 +2338,30 @@ function openPrintWindow(title, contentNode) {
   const mobileStyles = isMobilePrint
     ? `
     @media print {
-      .summary-card { display: block; width: 100%; }
-      .summary-card + .summary-card {
-        break-before: page;
-        page-break-before: always;
-      }
+      body { font-size: 10px; }
+      th, td { padding: 4px 5px; }
     }
   `
     : "";
 
   const styles = `
-    @page { size: A4 portrait; margin: 12mm; }
-    body { font-family: "Source Sans 3", Arial, sans-serif; padding: 0; color: #111827; }
+    @page { size: A4 portrait; margin: 8mm; }
+    * { box-sizing: border-box; }
+    body { font-family: "Source Sans 3", Arial, sans-serif; padding: 0; margin: 0; color: #111827; }
+    .print-root { width: 100%; max-width: 194mm; margin: 0 auto; }
     h1 { font-family: "Space Grotesk", sans-serif; font-size: 18px; margin: 0 0 12px; }
     table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed; }
     thead { display: table-header-group; }
-    th, td { border: 1px solid #111827; padding: 6px 8px; text-align: center; }
+    th, td { border: 1px solid #111827; padding: 5px 6px; text-align: center; }
     th:first-child, td:first-child { text-align: left; }
     th, td { word-break: break-word; }
     tr { break-inside: avoid; page-break-inside: avoid; }
     .summary-grid { display: block; }
     .summary-card {
-      display: inline-block;
+      display: block;
       width: 100%;
       border: 1px solid #111827;
-      padding: 8px;
+      padding: 6px;
       margin-bottom: 12px;
       break-inside: avoid;
       break-inside: avoid-page;
@@ -2411,8 +2410,10 @@ function openPrintWindow(title, contentNode) {
           <button onclick="window.print()">Imprimir</button>
           <button class="secondary" onclick="window.close()">Fechar</button>
         </div>
-        <h1>${title}</h1>
-        ${clone.outerHTML}
+        <div class="print-root">
+          <h1>${title}</h1>
+          ${clone.outerHTML}
+        </div>
       </body>
     </html>`
   );
