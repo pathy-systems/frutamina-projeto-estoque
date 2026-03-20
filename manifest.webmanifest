@@ -2,7 +2,7 @@
   "name": "Frutamina Estoque",
   "short_name": "Estoque CD",
   "description": "Contagem e acompanhamento do estoque do CD Frutamina.",
-  "start_url": "./editar.html",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0f172a",

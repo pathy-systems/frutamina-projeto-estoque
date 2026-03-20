@@ -1,5 +1,5 @@
-const STATIC_CACHE = "frutamina-static-v1";
-const RUNTIME_CACHE = "frutamina-runtime-v1";
+const STATIC_CACHE = "frutamina-static-v2";
+const RUNTIME_CACHE = "frutamina-runtime-v2";
 
 const APP_SHELL = [
   "./",
