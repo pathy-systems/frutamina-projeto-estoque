@@ -885,7 +885,8 @@ function buildInventoryTotalsMap(rows) {
       normalizedRow.marca,
       normalizedRow.tipo,
     ].join("|||");
-    map.set(key, normalizedRow.total_caixas);
+    const currentTotal = map.get(key) || 0;
+    map.set(key, currentTotal + normalizedRow.total_caixas);
   });
   return map;
 }
@@ -1294,6 +1295,18 @@ function getEarliestDate(rows) {
   return earliest;
 }
 
+function getLatestDate(rows) {
+  let latest = null;
+  (rows || []).forEach((row) => {
+    const source = row?.updated_at || row?.created_at;
+    if (!source) return;
+    const date = new Date(source);
+    if (Number.isNaN(date.getTime())) return;
+    if (!latest || date > latest) latest = date;
+  });
+  return latest;
+}
+
 function buildTimeSeries(rows, range) {
   const { dates, range: key } = buildRangeDates(range, rows);
 
@@ -1368,6 +1381,39 @@ function buildSnapshotEventSeries(rows, range, field) {
   });
 
   return { dates, values, range: key };
+}
+
+function getDashboardLiveRows() {
+  const sourceRows = state.rawPublicRows?.length
+    ? state.rawPublicRows
+    : state.publicRows;
+  return aggregateRows(cloneInventoryRows(sourceRows));
+}
+
+function mergeLivePointIntoSeries(series, liveRows) {
+  const normalizedRows = aggregateRows(liveRows || []);
+  if (!normalizedRows.length) return series;
+  const liveTotal = getTotalCaixas(normalizedRows);
+  const values = [...(series?.values || [])];
+  const dates = [...(series?.dates || [])];
+  const liveDate = getLatestDate(normalizedRows) || new Date();
+
+  if (!values.length) {
+    return {
+      dates: [liveDate],
+      values: [liveTotal],
+      range: normalizeRange(series?.range || state.dashboardRange),
+    };
+  }
+
+  values[values.length - 1] = liveTotal;
+  dates[dates.length - 1] = liveDate;
+
+  return {
+    ...series,
+    dates,
+    values,
+  };
 }
 
 function buildOutflowSeries(values) {
@@ -1507,11 +1553,15 @@ function renderLineChart(canvas, series, options = {}) {
 
 function buildDashboardSeries(range) {
   const snapshotRows = state.snapshotRows || [];
+  const liveRows = getDashboardLiveRows();
   const useSnapshots = snapshotRows.length > 0;
   const sourceRows = useSnapshots ? snapshotRows : state.rawPublicRows || [];
-  const total = useSnapshots
+  const totalBase = useSnapshots
     ? buildSnapshotSeries(sourceRows, range)
     : buildTimeSeries(sourceRows, range);
+  const total = liveRows.length
+    ? mergeLivePointIntoSeries(totalBase, liveRows)
+    : totalBase;
   const outflow = useSnapshots
     ? buildSnapshotEventSeries(sourceRows, range, "outflow_caixas")
     : {
@@ -1910,7 +1960,8 @@ async function saveSnapshotRecord({ rows, outflowCaixas = 0, showSuccess = true 
     pushMessage("warn", "Faca login para salvar o historico.");
     return false;
   }
-  const total = getTotalCaixas(rows);
+  const normalizedRows = aggregateRows(rows || []);
+  const total = getTotalCaixas(normalizedRows);
   const payload = {
     user_id: state.user.id,
     total_caixas: total,
@@ -3406,7 +3457,9 @@ async function saveNewCount() {
     ? cloneInventoryRows(state.previousCountRows)
     : cloneInventoryRows(state.userRows);
   const currentRows = cloneInventoryRows(state.sessionRows);
-  const outflowCaixas = calculateOutflowCaixas(previousRows, currentRows);
+  const previousPublicRows = aggregateRows(
+    cloneInventoryRows(state.rawPublicRows?.length ? state.rawPublicRows : state.publicRows)
+  );
   const confirmed = window.confirm(
     "Salvar nova contagem? Isso vai apagar a contagem antiga e substituir pela nova."
   );
@@ -3449,8 +3502,15 @@ async function saveNewCount() {
   updateCountModeUI();
   await loadUserRecords();
   await loadPublicRecords();
+  const currentPublicRows = aggregateRows(
+    cloneInventoryRows(state.rawPublicRows?.length ? state.rawPublicRows : state.publicRows)
+  );
+  const outflowCaixas = calculateOutflowCaixas(
+    previousPublicRows.length ? previousPublicRows : previousRows,
+    currentPublicRows.length ? currentPublicRows : currentRows
+  );
   const snapshotSaved = await saveSnapshotRecord({
-    rows: currentRows,
+    rows: currentPublicRows.length ? currentPublicRows : currentRows,
     outflowCaixas,
     showSuccess: false,
   });
@@ -4188,7 +4248,9 @@ function setupEvents() {
       );
       if (shouldSave) {
         const saved = await saveSnapshotRecord({
-          rows: cloneInventoryRows(state.userRows),
+          rows: aggregateRows(
+            cloneInventoryRows(state.rawPublicRows?.length ? state.rawPublicRows : state.userRows)
+          ),
           outflowCaixas: 0,
           showSuccess: false,
         });
