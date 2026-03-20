@@ -1009,6 +1009,35 @@ th {
   line-height: 1.45;
 }
 
+.count-mode-bar {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.count-mode-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.count-mode-toggle {
+  margin-top: 0;
+}
+
+.count-mode-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .hidden {
   display: none;
 }
@@ -1016,6 +1045,16 @@ th {
 @media (max-width: 720px) {
   .sync-banner {
     flex-direction: column;
+  }
+
+  .count-mode-row {
+    align-items: stretch;
+  }
+
+  .count-mode-tag {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
   }
 }
 

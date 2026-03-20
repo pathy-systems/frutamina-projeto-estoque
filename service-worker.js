@@ -1,5 +1,5 @@
-const STATIC_CACHE = "frutamina-static-v4";
-const RUNTIME_CACHE = "frutamina-runtime-v4";
+const STATIC_CACHE = "frutamina-static-v5";
+const RUNTIME_CACHE = "frutamina-runtime-v5";
 
 const APP_SHELL = [
   "./",
@@ -7,7 +7,7 @@ const APP_SHELL = [
   "./editar.html",
   "./visao-geral.html",
   "./manifest.webmanifest",
-  "./styles.css?v=20260320-3",
+  "./styles.css?v=20260320-4",
   "./assets/app.js?v=20260320-14",
   "./assets/img/logo.webp",
   "./assets/img/capa.png",
