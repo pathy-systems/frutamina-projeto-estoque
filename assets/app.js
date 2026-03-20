@@ -6,6 +6,7 @@ const SESSION_MAX_MS = 60 * 60 * 1000;
 const SUPABASE_TIMEOUT_MS = 45000;
 const PUBLIC_CACHE_KEY = "cd_public_cache";
 const PUBLIC_CACHE_AT_KEY = "cd_public_cache_at";
+const COUNT_DRAFT_KEY_PREFIX = "cd_count_draft_v1";
 
 const CONFIG_GERAL = {
   CHAO: {
@@ -142,6 +143,7 @@ const state = {
   sessionRows: [],
   userRows: [],
   previousCountRows: [],
+  previousPublicRows: [],
   editTarget: null,
   selectedRowKey: null,
   publicQuery: "",
@@ -171,6 +173,8 @@ const state = {
     total: null,
     outflow: null,
   },
+  countDraftSavedAt: null,
+  countDraftHash: "",
 };
 
 function toInt(value, fallback = 0) {
@@ -437,6 +441,10 @@ const elements = {
   publicMsg: document.getElementById("public-msg"),
   authPanel: document.getElementById("auth-panel"),
   countPanel: document.getElementById("count-panel"),
+  countSyncBanner: document.getElementById("count-sync-banner"),
+  countSyncPill: document.getElementById("count-sync-pill"),
+  countSyncTitle: document.getElementById("count-sync-title"),
+  countSyncText: document.getElementById("count-sync-text"),
   dashboardPanel: document.getElementById("dashboard-panel"),
   loginBtn: document.getElementById("login-btn"),
   email: document.getElementById("email"),
@@ -704,6 +712,271 @@ function loadPublicCache() {
   }
 }
 
+let countDraftPersistTimer = null;
+
+function getCountDraftStorageKey(userId = state.user?.id) {
+  if (!userId) return "";
+  return `${COUNT_DRAFT_KEY_PREFIX}_${userId}`;
+}
+
+function normalizeDraftRows(rows, prefix = "draft") {
+  return aggregateRows(
+    (rows || []).map((row, index) =>
+      hydrateInventoryRow({
+        ...(row || {}),
+        _localId:
+          row?._localId ||
+          row?.id ||
+          `${prefix}_${index}_${Math.random().toString(16).slice(2)}`,
+      })
+    )
+  );
+}
+
+function getCurrentPublicAggregateRows() {
+  const sourceRows = state.rawPublicRows?.length
+    ? state.rawPublicRows
+    : state.publicRows;
+  return aggregateRows(cloneInventoryRows(sourceRows));
+}
+
+function hasCountDraftData() {
+  return Boolean(
+    state.sessionRows.length ||
+      state.previousCountRows.length ||
+      state.previousPublicRows.length
+  );
+}
+
+function renderCountSyncStatus() {
+  if (!elements.countSyncBanner) return;
+
+  if (!state.user) {
+    elements.countSyncBanner.classList.add("hidden");
+    return;
+  }
+
+  const online = navigator.onLine;
+  const hasDraft = hasCountDraftData();
+  const lastSaved = formatDateTime(state.countDraftSavedAt);
+
+  let title = "";
+  let text = "";
+
+  if (hasDraft) {
+    if (online) {
+      title =
+        state.countMode === "new"
+          ? "Nova contagem protegida neste aparelho"
+          : "Rascunho da nova contagem guardado neste aparelho";
+      text =
+        lastSaved === "--"
+          ? "Voce pode continuar contando. Ao salvar a nova contagem, o sistema sincroniza tudo de uma vez."
+          : `Voce pode continuar contando. Ultimo salvamento local: ${lastSaved}. Ao salvar a nova contagem, o sistema sincroniza tudo de uma vez.`;
+    } else {
+      title = "Sem internet, mas a contagem continua segura";
+      text =
+        lastSaved === "--"
+          ? "Os lancamentos desta nova contagem seguem salvos neste aparelho ate a conexao voltar."
+          : `Os lancamentos desta nova contagem seguem salvos neste aparelho. Ultimo salvamento local: ${lastSaved}.`;
+    }
+  } else if (online) {
+    title = "Sistema pronto para contagem offline";
+    text =
+      "Quando voce iniciar uma nova contagem, o rascunho sera salvo automaticamente neste aparelho.";
+  } else {
+    title = "Sem internet no momento";
+    text =
+      "Se a nova contagem ja foi iniciada, continue normalmente. Se ainda nao foi, inicie antes de entrar na camara para garantir o rascunho offline.";
+  }
+
+  elements.countSyncBanner.classList.remove("hidden");
+
+  if (elements.countSyncPill) {
+    elements.countSyncPill.textContent = online ? "Online" : "Offline";
+    elements.countSyncPill.className = `sync-pill ${online ? "online" : "offline"}`;
+  }
+  if (elements.countSyncTitle) {
+    elements.countSyncTitle.textContent = title;
+  }
+  if (elements.countSyncText) {
+    elements.countSyncText.textContent = text;
+  }
+}
+
+function saveCountDraftLocally() {
+  if (!state.user) return false;
+
+  const storageKey = getCountDraftStorageKey();
+  if (!storageKey) return false;
+
+  if (!hasCountDraftData()) {
+    localStorage.removeItem(storageKey);
+    state.countDraftSavedAt = null;
+    state.countDraftHash = "";
+    renderCountSyncStatus();
+    return false;
+  }
+
+  const payload = {
+    version: 1,
+    user_id: state.user.id,
+    setor: state.setor,
+    produto: state.produto,
+    marca: state.marca,
+    tipo: state.tipo,
+    count_mode: state.countMode,
+    session_rows: cloneInventoryRows(state.sessionRows),
+    previous_count_rows: cloneInventoryRows(state.previousCountRows),
+    previous_public_rows: cloneInventoryRows(state.previousPublicRows),
+  };
+  const payloadHash = JSON.stringify(payload);
+
+  if (payloadHash === state.countDraftHash) {
+    renderCountSyncStatus();
+    return true;
+  }
+
+  payload.saved_at = new Date().toISOString();
+
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(payload));
+    state.countDraftSavedAt = payload.saved_at;
+    state.countDraftHash = payloadHash;
+    renderCountSyncStatus();
+    return true;
+  } catch (error) {
+    console.warn("Nao foi possivel salvar rascunho local da contagem.", error);
+    pushMessage(
+      "warn",
+      "Nao foi possivel salvar o rascunho offline neste aparelho."
+    );
+    renderCountSyncStatus();
+    return false;
+  }
+}
+
+function scheduleCountDraftPersist() {
+  renderCountSyncStatus();
+  if (!state.user || state.countMode !== "new") return;
+  clearTimeout(countDraftPersistTimer);
+  countDraftPersistTimer = setTimeout(() => {
+    saveCountDraftLocally();
+  }, 120);
+}
+
+function clearCountDraft(options = {}) {
+  const { userId = state.user?.id, keepSavedAt = false } = options;
+  clearTimeout(countDraftPersistTimer);
+  const storageKey = getCountDraftStorageKey(userId);
+  if (storageKey) {
+    localStorage.removeItem(storageKey);
+  }
+  if (!keepSavedAt) {
+    state.countDraftSavedAt = null;
+  }
+  state.countDraftHash = "";
+  renderCountSyncStatus();
+}
+
+function restoreCountDraftForCurrentUser() {
+  if (!state.user) return false;
+
+  const storageKey = getCountDraftStorageKey();
+  if (!storageKey) return false;
+
+  const raw = localStorage.getItem(storageKey);
+  if (!raw) {
+    state.countDraftSavedAt = null;
+    state.countDraftHash = "";
+    state.sessionRows = [];
+    state.previousCountRows = [];
+    state.previousPublicRows = [];
+    state.countMode = "current";
+    renderCountSyncStatus();
+    return false;
+  }
+
+  try {
+    const payload = JSON.parse(raw);
+    const sessionRows = normalizeDraftRows(payload?.session_rows, "session");
+    const previousCountRows = normalizeDraftRows(
+      payload?.previous_count_rows,
+      "previous_count"
+    );
+    const previousPublicRows = normalizeDraftRows(
+      payload?.previous_public_rows,
+      "previous_public"
+    );
+    const hasDraft =
+      sessionRows.length || previousCountRows.length || previousPublicRows.length;
+
+    if (!hasDraft) {
+      clearCountDraft();
+      state.sessionRows = [];
+      state.previousCountRows = [];
+      state.previousPublicRows = [];
+      state.countMode = "current";
+      return false;
+    }
+
+    state.sessionRows = sessionRows;
+    state.previousCountRows = previousCountRows.length
+      ? previousCountRows
+      : cloneInventoryRows(state.userRows);
+    state.previousPublicRows = previousPublicRows.length
+      ? previousPublicRows
+      : getCurrentPublicAggregateRows();
+    state.countMode = "new";
+    state.selectedRowKey = null;
+    state.setor = normalizeSetorValue(payload?.setor) || state.setor;
+    state.produto = payload?.produto || null;
+    state.marca = payload?.marca || null;
+    state.tipo =
+      payload?.tipo === 0 || Number.isFinite(payload?.tipo)
+        ? payload.tipo
+        : null;
+    state.countDraftSavedAt = payload?.saved_at || null;
+    const restoredHash = JSON.stringify({
+      version: payload?.version ?? 1,
+      user_id: state.user.id,
+      setor: state.setor,
+      produto: state.produto,
+      marca: state.marca,
+      tipo: state.tipo,
+      count_mode: payload?.count_mode || "new",
+      session_rows: cloneInventoryRows(state.sessionRows),
+      previous_count_rows: cloneInventoryRows(state.previousCountRows),
+      previous_public_rows: cloneInventoryRows(state.previousPublicRows),
+    });
+    const shouldAnnounceRestore =
+      restoredHash !== state.countDraftHash || state.countMode !== "new";
+    state.countDraftHash = restoredHash;
+
+    renderContext();
+    updateCountModeUI();
+    renderCountTable();
+    if (shouldAnnounceRestore) {
+      pushMessage(
+        "info",
+        "Rascunho local da nova contagem recuperado neste aparelho."
+      );
+    }
+    renderCountSyncStatus();
+    return true;
+  } catch (error) {
+    console.warn("Nao foi possivel restaurar rascunho local da contagem.", error);
+    clearCountDraft();
+    state.sessionRows = [];
+    state.previousCountRows = [];
+    state.previousPublicRows = [];
+    state.countMode = "current";
+    state.countDraftHash = "";
+    renderCountSyncStatus();
+    return false;
+  }
+}
+
 function setEditMessage(type, text) {
   if (!elements.editMsg) return;
   elements.editMsg.innerHTML = "";
@@ -850,6 +1123,14 @@ function renderContext() {
   if (elements.ctxProduto) elements.ctxProduto.textContent = state.produto || "--";
   if (elements.ctxMarca) elements.ctxMarca.textContent = state.marca || "--";
   if (elements.setorSelect) elements.setorSelect.value = state.setor;
+  if (elements.manualSetor && elements.manualSetor.value !== state.setor) {
+    elements.manualSetor.value = state.setor || "";
+    updateManualDependencies();
+  }
+  renderCountSyncStatus();
+  if (state.countMode === "new") {
+    scheduleCountDraftPersist();
+  }
 }
 
 function aggregateRows(rows) {
@@ -1384,10 +1665,7 @@ function buildSnapshotEventSeries(rows, range, field) {
 }
 
 function getDashboardLiveRows() {
-  const sourceRows = state.rawPublicRows?.length
-    ? state.rawPublicRows
-    : state.publicRows;
-  return aggregateRows(cloneInventoryRows(sourceRows));
+  return getCurrentPublicAggregateRows();
 }
 
 function mergeLivePointIntoSeries(series, liveRows) {
@@ -1877,6 +2155,10 @@ function renderCountTable() {
   }
   elements.countTotalGeral.textContent = total;
   renderCountSummary();
+  renderCountSyncStatus();
+  if (state.countMode === "new") {
+    scheduleCountDraftPersist();
+  }
 }
 
 function getCountRowsForSetor() {
@@ -3423,24 +3705,38 @@ function updateCountModeUI() {
 
 function setCountMode(mode) {
   if (mode === state.countMode) return;
+  state.selectedRowKey = null;
   if (mode === "new") {
-    const confirmed = window.confirm(
-      "Iniciar nova contagem? A contagem atual só será substituída quando você salvar."
-    );
-    if (!confirmed) return;
-    state.countMode = "new";
-    state.sessionRows = [];
-    state.previousCountRows = cloneInventoryRows(state.userRows);
-    pushMessage(
-      "info",
-      "Nova contagem iniciada. O estoque anterior ficou guardado temporariamente para comparacao no final."
-    );
+    if (hasCountDraftData()) {
+      state.countMode = "new";
+      pushMessage("info", "Rascunho da nova contagem retomado.");
+    } else {
+      const confirmed = window.confirm(
+        "Iniciar nova contagem? A contagem atual so sera substituida quando voce salvar."
+      );
+      if (!confirmed) return;
+      state.countMode = "new";
+      state.sessionRows = [];
+      state.previousCountRows = cloneInventoryRows(state.userRows);
+      state.previousPublicRows = getCurrentPublicAggregateRows();
+      pushMessage(
+        "info",
+        "Nova contagem iniciada. O estoque anterior ficou guardado temporariamente para comparacao no final."
+      );
+    }
   } else {
+    if (hasCountDraftData()) {
+      const confirmed = window.confirm(
+        "Voltar para o estoque atual? O rascunho da nova contagem ficara salvo neste aparelho para voce retomar depois."
+      );
+      if (!confirmed) return;
+      saveCountDraftLocally();
+      pushMessage("info", "Rascunho da nova contagem mantido neste aparelho.");
+    }
     state.countMode = "current";
-    state.sessionRows = [];
-    state.previousCountRows = [];
   }
   updateCountModeUI();
+  renderContext();
   renderCountTable();
 }
 
@@ -3453,73 +3749,102 @@ async function saveNewCount() {
     pushMessage("warn", "Nenhum item na nova contagem para salvar.");
     return;
   }
+  if (!navigator.onLine) {
+    saveCountDraftLocally();
+    pushMessage(
+      "warn",
+      "Sem internet. A nova contagem continua salva neste aparelho. Conecte-se e tente sincronizar novamente."
+    );
+    return;
+  }
   const previousRows = state.previousCountRows.length
     ? cloneInventoryRows(state.previousCountRows)
     : cloneInventoryRows(state.userRows);
   const currentRows = cloneInventoryRows(state.sessionRows);
-  const previousPublicRows = aggregateRows(
-    cloneInventoryRows(state.rawPublicRows?.length ? state.rawPublicRows : state.publicRows)
-  );
+  const previousPublicRows = state.previousPublicRows.length
+    ? cloneInventoryRows(state.previousPublicRows)
+    : getCurrentPublicAggregateRows();
   const confirmed = window.confirm(
     "Salvar nova contagem? Isso vai apagar a contagem antiga e substituir pela nova."
   );
   if (!confirmed) return;
 
-  const { error: deleteError } = await supabaseClient
-    .from(TABLE_NAME)
-    .delete()
-    .eq("user_id", state.user.id);
-  if (deleteError) {
-    pushMessage("error", `Erro ao apagar contagem antiga: ${deleteError.message}`);
-    return;
+  try {
+    const deleteResult = await withTimeout(
+      supabaseClient.from(TABLE_NAME).delete().eq("user_id", state.user.id),
+      SUPABASE_TIMEOUT_MS,
+      "Tempo limite ao sincronizar a nova contagem."
+    );
+    const deleteError = deleteResult?.error;
+    if (deleteError) {
+      pushMessage(
+        "error",
+        `Erro ao apagar contagem antiga: ${deleteError.message}. O rascunho offline foi mantido neste aparelho.`
+      );
+      saveCountDraftLocally();
+      return;
+    }
+
+    const payload = currentRows.map((row) =>
+      buildDbRowPayload(
+        {
+          ...row,
+          user_id: state.user.id,
+        },
+        true,
+        row.caixas_avulsas > 0
+      )
+    );
+
+    const insertResult = await withTimeout(
+      supabaseClient.from(TABLE_NAME).insert(payload),
+      SUPABASE_TIMEOUT_MS,
+      "Tempo limite ao enviar a nova contagem."
+    );
+    const insertError = insertResult?.error;
+    if (insertError) {
+      const message = isLooseBoxesSchemaError(insertError)
+        ? "Erro ao salvar nova contagem: rode a migracao de caixas avulsas no Supabase. O rascunho offline foi mantido neste aparelho."
+        : `Erro ao salvar nova contagem: ${insertError.message}. O rascunho offline foi mantido neste aparelho.`;
+      pushMessage("error", message);
+      saveCountDraftLocally();
+      return;
+    }
+
+    state.sessionRows = [];
+    state.previousCountRows = [];
+    state.previousPublicRows = [];
+    state.countMode = "current";
+    clearCountDraft();
+    updateCountModeUI();
+    renderContext();
+    await loadUserRecords();
+    await loadPublicRecords();
+    const currentPublicRows = aggregateRows(
+      cloneInventoryRows(state.rawPublicRows?.length ? state.rawPublicRows : state.publicRows)
+    );
+    const outflowCaixas = calculateOutflowCaixas(
+      previousPublicRows.length ? previousPublicRows : previousRows,
+      currentPublicRows.length ? currentPublicRows : currentRows
+    );
+    const snapshotSaved = await saveSnapshotRecord({
+      rows: currentPublicRows.length ? currentPublicRows : currentRows,
+      outflowCaixas,
+      showSuccess: false,
+    });
+    pushMessage(
+      snapshotSaved ? "success" : "warn",
+      snapshotSaved
+        ? "Nova contagem salva. Visao geral atualizada com total e saida."
+        : "Nova contagem salva, mas o historico da visao geral nao foi atualizado."
+    );
+  } catch (error) {
+    pushMessage(
+      "error",
+      `${error?.message || "Erro ao sincronizar a nova contagem."} O rascunho offline foi mantido neste aparelho.`
+    );
+    saveCountDraftLocally();
   }
-
-  const payload = currentRows.map((row) =>
-    buildDbRowPayload(
-      {
-        ...row,
-        user_id: state.user.id,
-      },
-      true,
-      row.caixas_avulsas > 0
-    )
-  );
-
-  const { error: insertError } = await supabaseClient
-    .from(TABLE_NAME)
-    .insert(payload);
-  if (insertError) {
-    const message = isLooseBoxesSchemaError(insertError)
-      ? "Erro ao salvar nova contagem: rode a migracao de caixas avulsas no Supabase."
-      : `Erro ao salvar nova contagem: ${insertError.message}`;
-    pushMessage("error", message);
-    return;
-  }
-
-  state.sessionRows = [];
-  state.previousCountRows = [];
-  state.countMode = "current";
-  updateCountModeUI();
-  await loadUserRecords();
-  await loadPublicRecords();
-  const currentPublicRows = aggregateRows(
-    cloneInventoryRows(state.rawPublicRows?.length ? state.rawPublicRows : state.publicRows)
-  );
-  const outflowCaixas = calculateOutflowCaixas(
-    previousPublicRows.length ? previousPublicRows : previousRows,
-    currentPublicRows.length ? currentPublicRows : currentRows
-  );
-  const snapshotSaved = await saveSnapshotRecord({
-    rows: currentPublicRows.length ? currentPublicRows : currentRows,
-    outflowCaixas,
-    showSuccess: false,
-  });
-  pushMessage(
-    snapshotSaved ? "success" : "warn",
-    snapshotSaved
-      ? "Nova contagem salva. Visao geral atualizada com total e saida."
-      : "Nova contagem salva, mas o historico da visao geral nao foi atualizado."
-  );
 }
 
 function discardNewCount() {
@@ -3529,8 +3854,11 @@ function discardNewCount() {
   if (!confirmed) return;
   state.sessionRows = [];
   state.previousCountRows = [];
+  state.previousPublicRows = [];
   state.countMode = "current";
+  clearCountDraft();
   updateCountModeUI();
+  renderContext();
   renderCountTable();
   pushMessage("info", "Nova contagem descartada.");
 }
@@ -4232,6 +4560,7 @@ function setupEvents() {
         if (!confirmClear) return;
         state.sessionRows = [];
         state.selectedRowKey = null;
+        saveCountDraftLocally();
         renderCountTable();
         pushMessage("success", "Nova contagem limpa em todos os setores.");
         return;
@@ -4262,10 +4591,13 @@ function setupEvents() {
         }
       }
       state.previousCountRows = cloneInventoryRows(state.userRows);
+      state.previousPublicRows = getCurrentPublicAggregateRows();
       state.sessionRows = [];
       state.selectedRowKey = null;
       state.countMode = "new";
+      saveCountDraftLocally();
       updateCountModeUI();
+      renderContext();
       renderCountTable();
       pushMessage(
         "success",
@@ -4280,6 +4612,26 @@ function setupEvents() {
     if (event.key === "Escape") {
       closeExportSheet("public");
       closeExportSheet("count");
+    }
+  });
+
+  window.addEventListener("online", () => {
+    renderCountSyncStatus();
+  });
+
+  window.addEventListener("offline", () => {
+    renderCountSyncStatus();
+  });
+
+  window.addEventListener("pagehide", () => {
+    if (state.countMode === "new") {
+      saveCountDraftLocally();
+    }
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && state.countMode === "new") {
+      saveCountDraftLocally();
     }
   });
 
@@ -4321,12 +4673,15 @@ async function handleAuthState(event, session) {
       renderCountTable();
       updateCountModeUI();
       await loadUserRecords();
+      restoreCountDraftForCurrentUser();
+      renderCountSyncStatus();
     } else {
       hideAuthPanel();
       hideCountPanels();
     }
   } else {
     state.previousCountRows = [];
+    state.previousPublicRows = [];
     if (event === "SIGNED_OUT") {
       clearLoginTimestamp();
     }
@@ -4336,7 +4691,11 @@ async function handleAuthState(event, session) {
       showAuthPanel();
       hideCountPanels();
       state.userRows = [];
+      state.countMode = "current";
+      state.countDraftSavedAt = null;
+      state.countDraftHash = "";
       renderCountTable();
+      renderCountSyncStatus();
     } else {
       hideAuthPanel();
       hideCountPanels();

@@ -14,7 +14,7 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
     />
-    <link rel="stylesheet" href="styles.css?v=20260319-2" />
+    <link rel="stylesheet" href="styles.css?v=20260320-3" />
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
   <body data-page="edit">
@@ -58,6 +58,15 @@
       </section>
 
       <section id="count-panel" class="hidden">
+        <section id="count-sync-banner" class="sync-banner hidden">
+          <div id="count-sync-pill" class="sync-pill online">Online</div>
+          <div class="sync-copy">
+            <strong id="count-sync-title">Sistema pronto para contagem offline</strong>
+            <span id="count-sync-text">
+              Quando voce iniciar uma nova contagem, o rascunho sera salvo automaticamente neste aparelho.
+            </span>
+          </div>
+        </section>
         <div class="grid">
           <section class="card voice-card" id="voice-card">
             <div class="voice-visual" aria-hidden="true">
@@ -284,6 +293,6 @@
       </div>
     </div>
 
-    <script src="assets/app.js?v=20260320-11"></script>
+    <script src="assets/app.js?v=20260320-12"></script>
   </body>
 </html>

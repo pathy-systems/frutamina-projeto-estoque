@@ -949,8 +949,74 @@ th {
   color: #b91c1c;
 }
 
+.sync-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #f8fbff 0%, #eef6ff 100%);
+  border: 1px solid rgba(147, 197, 253, 0.35);
+}
+
+.sync-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sync-pill::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+
+.sync-pill.online {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.sync-pill.offline {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.sync-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.sync-copy strong {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 15px;
+  color: #0f172a;
+}
+
+.sync-copy span {
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
 .hidden {
   display: none;
+}
+
+@media (max-width: 720px) {
+  .sync-banner {
+    flex-direction: column;
+  }
 }
 
 .print-overlay {
