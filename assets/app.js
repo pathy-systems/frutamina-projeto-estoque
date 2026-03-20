@@ -824,7 +824,7 @@ function isNoTipoBrand(marca) {
 }
 
 function isNoTipoContext(produto, marca) {
-  return isNoTipoProduct(produto) || isNoTipoBrand(marca);
+  return isNoTipoProduct(produto);
 }
 
 function formatTipoLabelValue(produto, tipo, marca = "") {
