@@ -141,6 +141,7 @@ const state = {
   countMode: "current",
   sessionRows: [],
   userRows: [],
+  previousCountRows: [],
   editTarget: null,
   selectedRowKey: null,
   publicQuery: "",
@@ -870,6 +871,36 @@ function aggregateRows(rows) {
   return Array.from(map.values());
 }
 
+function cloneInventoryRows(rows) {
+  return (rows || []).map((row) => hydrateInventoryRow({ ...row }));
+}
+
+function buildInventoryTotalsMap(rows) {
+  const map = new Map();
+  (rows || []).forEach((row) => {
+    const normalizedRow = hydrateInventoryRow(row);
+    const key = [
+      normalizedRow.setor,
+      normalizedRow.produto,
+      normalizedRow.marca,
+      normalizedRow.tipo,
+    ].join("|||");
+    map.set(key, normalizedRow.total_caixas);
+  });
+  return map;
+}
+
+function calculateOutflowCaixas(previousRows, currentRows) {
+  const previousMap = buildInventoryTotalsMap(previousRows);
+  const currentMap = buildInventoryTotalsMap(currentRows);
+  let total = 0;
+  previousMap.forEach((previousTotal, key) => {
+    const currentTotal = currentMap.get(key) || 0;
+    total += Math.max(0, previousTotal - currentTotal);
+  });
+  return total;
+}
+
 function formatSummaryValue(value, showZero = false) {
   if (value === null || value === undefined) return "";
   if (value === 0 && !showZero) return "";
@@ -1308,6 +1339,37 @@ function buildSnapshotSeries(rows, range) {
   return { dates, values, range: key };
 }
 
+function buildSnapshotEventSeries(rows, range, field) {
+  const { dates, range: key } = buildRangeDates(range, rows);
+  const values = new Array(dates.length).fill(0);
+  const points = (rows || [])
+    .map((row) => {
+      const source = row?.created_at || row?.updated_at;
+      const date = source ? new Date(source) : null;
+      if (!date || Number.isNaN(date.getTime())) return null;
+      return {
+        date,
+        value: Number(row?.[field]) || 0,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.date - b.date);
+
+  points.forEach((point) => {
+    let bucketIndex = 0;
+    for (let i = 0; i < dates.length; i += 1) {
+      if (dates[i] <= point.date) {
+        bucketIndex = i;
+      } else {
+        break;
+      }
+    }
+    values[bucketIndex] = point.value;
+  });
+
+  return { dates, values, range: key };
+}
+
 function buildOutflowSeries(values) {
   return values.map((value, index) => {
     if (index === 0) return 0;
@@ -1450,12 +1512,13 @@ function buildDashboardSeries(range) {
   const total = useSnapshots
     ? buildSnapshotSeries(sourceRows, range)
     : buildTimeSeries(sourceRows, range);
-  const outflowValues = buildOutflowSeries(total.values);
-  const outflow = {
-    dates: total.dates,
-    values: outflowValues,
-    range: total.range,
-  };
+  const outflow = useSnapshots
+    ? buildSnapshotEventSeries(sourceRows, range, "outflow_caixas")
+    : {
+        dates: total.dates,
+        values: buildOutflowSeries(total.values),
+        range: total.range,
+      };
   return { range: total.range, total, outflow, source: useSnapshots ? "snapshot" : "live" };
 }
 
@@ -1819,7 +1882,7 @@ async function loadSnapshotRecords(options = {}) {
   const { showError = false } = options;
   const { data, error } = await supabaseClient
     .from(SNAPSHOT_TABLE)
-    .select("id, user_id, total_caixas, created_at")
+    .select("*")
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -1837,26 +1900,50 @@ async function loadSnapshotRecords(options = {}) {
   return { data: state.snapshotRows, error: null };
 }
 
-async function saveSnapshotTotal() {
+function isSnapshotOutflowSchemaError(error) {
+  const message = error?.message || "";
+  return /outflow_caixas/i.test(message);
+}
+
+async function saveSnapshotRecord({ rows, outflowCaixas = 0, showSuccess = true }) {
   if (!state.user) {
     pushMessage("warn", "Faca login para salvar o historico.");
     return false;
   }
-  let total = getTotalCaixas(state.publicRows);
-  if (!state.publicRows.length && state.userRows.length) {
-    total = getTotalCaixas(state.userRows);
-  }
-  const { error } = await supabaseClient.from(SNAPSHOT_TABLE).insert({
+  const total = getTotalCaixas(rows);
+  const payload = {
     user_id: state.user.id,
     total_caixas: total,
-  });
+  };
+  if (outflowCaixas > 0) {
+    payload.outflow_caixas = outflowCaixas;
+  }
+
+  const { error } = await supabaseClient.from(SNAPSHOT_TABLE).insert(payload);
   if (error) {
-    pushMessage("error", `Erro ao salvar historico: ${error.message}`);
+    const message = isSnapshotOutflowSchemaError(error)
+      ? "Historico salvo sem saida. Rode a migracao do dashboard no Supabase."
+      : `Erro ao salvar historico: ${error.message}`;
+    pushMessage("error", message);
     return false;
   }
-  pushMessage("success", "Historico salvo com sucesso.");
+  if (showSuccess) {
+    pushMessage("success", "Historico salvo com sucesso.");
+  }
   await loadSnapshotRecords();
   return true;
+}
+
+async function saveSnapshotTotal() {
+  let rows = state.userRows;
+  if (!rows.length) {
+    rows = state.publicRows;
+  }
+  return saveSnapshotRecord({
+    rows,
+    outflowCaixas: 0,
+    showSuccess: true,
+  });
 }
 
 async function loadPublicRecords() {
@@ -3292,13 +3379,15 @@ function setCountMode(mode) {
     if (!confirmed) return;
     state.countMode = "new";
     state.sessionRows = [];
+    state.previousCountRows = cloneInventoryRows(state.userRows);
     pushMessage(
       "info",
-      "Nova contagem iniciada. Salve quando terminar para substituir a contagem antiga."
+      "Nova contagem iniciada. O estoque anterior ficou guardado temporariamente para comparacao no final."
     );
   } else {
     state.countMode = "current";
     state.sessionRows = [];
+    state.previousCountRows = [];
   }
   updateCountModeUI();
   renderCountTable();
@@ -3313,6 +3402,11 @@ async function saveNewCount() {
     pushMessage("warn", "Nenhum item na nova contagem para salvar.");
     return;
   }
+  const previousRows = state.previousCountRows.length
+    ? cloneInventoryRows(state.previousCountRows)
+    : cloneInventoryRows(state.userRows);
+  const currentRows = cloneInventoryRows(state.sessionRows);
+  const outflowCaixas = calculateOutflowCaixas(previousRows, currentRows);
   const confirmed = window.confirm(
     "Salvar nova contagem? Isso vai apagar a contagem antiga e substituir pela nova."
   );
@@ -3327,7 +3421,7 @@ async function saveNewCount() {
     return;
   }
 
-  const payload = state.sessionRows.map((row) =>
+  const payload = currentRows.map((row) =>
     buildDbRowPayload(
       {
         ...row,
@@ -3350,11 +3444,22 @@ async function saveNewCount() {
   }
 
   state.sessionRows = [];
+  state.previousCountRows = [];
   state.countMode = "current";
   updateCountModeUI();
   await loadUserRecords();
   await loadPublicRecords();
-  pushMessage("success", "Nova contagem salva. Estoque atualizado.");
+  const snapshotSaved = await saveSnapshotRecord({
+    rows: currentRows,
+    outflowCaixas,
+    showSuccess: false,
+  });
+  pushMessage(
+    snapshotSaved ? "success" : "warn",
+    snapshotSaved
+      ? "Nova contagem salva. Visao geral atualizada com total e saida."
+      : "Nova contagem salva, mas o historico da visao geral nao foi atualizado."
+  );
 }
 
 function discardNewCount() {
@@ -3363,6 +3468,7 @@ function discardNewCount() {
   );
   if (!confirmed) return;
   state.sessionRows = [];
+  state.previousCountRows = [];
   state.countMode = "current";
   updateCountModeUI();
   renderCountTable();
@@ -4061,50 +4167,49 @@ function setupEvents() {
     elements.countClearBtn.addEventListener("click", async () => {
       if (state.countMode === "new") {
         const confirmClear = window.confirm(
-          `Deseja limpar a nova contagem do setor ${state.setor}?`
+          "Deseja limpar a nova contagem inteira? Isso vai zerar todos os setores que voce ja contou."
         );
         if (!confirmClear) return;
-        state.sessionRows = state.sessionRows.filter(
-          (row) => row.setor !== state.setor
-        );
+        state.sessionRows = [];
+        state.selectedRowKey = null;
         renderCountTable();
-        pushMessage("success", "Nova contagem limpa para o setor atual.");
+        pushMessage("success", "Nova contagem limpa em todos os setores.");
         return;
       }
 
       if (!state.user) return;
       const confirmClear = window.confirm(
-        `Deseja apagar todas as contagens do setor ${state.setor}?`
+        "Deseja iniciar uma nova contagem do zero para todos os setores?"
       );
       if (!confirmClear) return;
 
       const shouldSave = window.confirm(
-        "Salvar o estoque atual no historico antes de apagar?\nOK = salvar e apagar\nCancelar = apagar sem salvar"
+        "Salvar o total atual no historico antes de iniciar a nova contagem?\nOK = salvar e iniciar\nCancelar = iniciar sem salvar"
       );
       if (shouldSave) {
-        const saved = await saveSnapshotTotal();
+        const saved = await saveSnapshotRecord({
+          rows: cloneInventoryRows(state.userRows),
+          outflowCaixas: 0,
+          showSuccess: false,
+        });
         if (!saved) {
           const proceed = window.confirm(
-            "Falha ao salvar o historico. Deseja apagar mesmo assim?"
+            "Falha ao salvar o historico. Deseja iniciar a nova contagem mesmo assim?"
           );
           if (!proceed) return;
         }
       }
-      const { error } = await supabaseClient
-        .from(TABLE_NAME)
-        .delete()
-        .eq("user_id", state.user.id)
-        .eq("setor", state.setor);
-      if (error) {
-        pushMessage("error", `Erro ao limpar: ${error.message}`);
-        return;
-      }
-      await loadPublicRecords();
+      state.previousCountRows = cloneInventoryRows(state.userRows);
+      state.sessionRows = [];
+      state.selectedRowKey = null;
+      state.countMode = "new";
+      updateCountModeUI();
+      renderCountTable();
       pushMessage(
         "success",
         shouldSave
-          ? "Contagem limpa e historico salvo."
-          : "Contagem limpa para o setor atual."
+          ? "Nova contagem iniciada do zero. Estoque anterior salvo e guardado temporariamente para comparacao."
+          : "Nova contagem iniciada do zero. Estoque anterior guardado temporariamente para comparacao."
       );
     });
   }
@@ -4159,6 +4264,7 @@ async function handleAuthState(event, session) {
       hideCountPanels();
     }
   } else {
+    state.previousCountRows = [];
     if (event === "SIGNED_OUT") {
       clearLoginTimestamp();
     }
