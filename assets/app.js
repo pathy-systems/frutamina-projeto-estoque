@@ -3106,7 +3106,12 @@ async function processCommand(rawText) {
       if (changed) {
         state.tipo = null;
       }
-      pushMessage("info", `Marca fixada: ${brandFound}`);
+      pushMessage(
+        "info",
+        /\bKG\b/.test(normalizeText(brandFound)) && !isNoTipoProduct(state.produto)
+          ? `Marca fixada: ${brandFound}. Agora diga o tipo.`
+          : `Marca fixada: ${brandFound}`
+      );
     }
   } else {
     const anyBrand = findExactMatch(tokens, buildAllBrandMap(products));
