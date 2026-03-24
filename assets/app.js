@@ -40,12 +40,12 @@ const CONFIG_GERAL = {
       SAMBA: (t) => 65,
       BRAZIL: (t) => 65,
     },
+    ORANGE: {
+      BAHIA: (t) => 130,
+    },
     DINO: {
       SAMBA: (t) => 84,
       BRAZIL: (t) => 84,
-    },
-    ORANGE: {
-      BAHIA: (t) => 130,
     },
   },
   ITAUEIRA: {
@@ -810,6 +810,7 @@ function normalizeText(text) {
     QUILOGRAMAS: "KG",
     CEP: "CEPI",
     BRASIL: "BRAZIL",
+    ORANAGE: "ORANGE",
   };
 
   return tokens.map((token) => tokenMap[token] || token).join(" ").trim();
@@ -5567,4 +5568,3 @@ window.addEventListener("resize", () => {
     renderDashboard();
   }
 });
-
