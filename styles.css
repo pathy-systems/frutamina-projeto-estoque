@@ -917,6 +917,19 @@ th {
   opacity: 1;
 }
 
+.comparison-card .card-header p {
+  color: #64748b;
+}
+
+.comparison-wrap {
+  margin-top: 8px;
+}
+
+.comparison-loss {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
 .msg-area {
   display: grid;
   gap: 8px;

@@ -7,6 +7,7 @@ const SUPABASE_TIMEOUT_MS = 45000;
 const PUBLIC_CACHE_KEY = "cd_public_cache";
 const PUBLIC_CACHE_AT_KEY = "cd_public_cache_at";
 const COUNT_DRAFT_KEY_PREFIX = "cd_count_draft_v1";
+const LAST_COMPARISON_KEY = "cd_last_comparison_v1";
 
 const CONFIG_GERAL = {
   CHAO: {
@@ -49,7 +50,7 @@ const CONFIG_GERAL = {
       REI: (t) => (t === 4 ? 77 : 84),
       "REI 14Kg": (t) => 66,
       CEPI: (t) => (t === 4 ? 77 : 84),
-      GAIA: (t) => (t === 4 ? 77 : 84),
+      GAIA: (t) => (t >= 4 && t <= 7 ? 66 : 65),
     },
     SAPO: {
       REI: (t) => (t === 4 ? 77 : 84),
@@ -178,6 +179,7 @@ const state = {
     total: null,
     outflow: null,
   },
+  lastComparisonReport: null,
   countDraftSavedAt: null,
   countDraftHash: "",
 };
@@ -772,6 +774,8 @@ const elements = {
   chartOutflowChange: document.getElementById("chart-outflow-change"),
   chartOutflowDate: document.getElementById("chart-outflow-date"),
   chartOutflowTooltip: document.getElementById("chart-outflow-tooltip"),
+  comparisonMeta: document.getElementById("comparison-meta"),
+  comparisonBody: document.getElementById("comparison-body"),
 };
 
 const PAGE_MODE = document.body?.dataset?.page || "view";
@@ -1471,16 +1475,21 @@ function cloneInventoryRows(rows) {
   return (rows || []).map((row) => hydrateInventoryRow({ ...row }));
 }
 
+function buildInventoryIdentityKey(row) {
+  const normalizedRow = hydrateInventoryRow(row);
+  return [
+    normalizedRow.setor,
+    normalizedRow.produto,
+    normalizedRow.marca,
+    normalizedRow.tipo,
+  ].join("|||");
+}
+
 function buildInventoryTotalsMap(rows) {
   const map = new Map();
   (rows || []).forEach((row) => {
     const normalizedRow = hydrateInventoryRow(row);
-    const key = [
-      normalizedRow.setor,
-      normalizedRow.produto,
-      normalizedRow.marca,
-      normalizedRow.tipo,
-    ].join("|||");
+    const key = buildInventoryIdentityKey(normalizedRow);
     const currentTotal = map.get(key) || 0;
     map.set(key, currentTotal + normalizedRow.total_caixas);
   });
@@ -1496,6 +1505,177 @@ function calculateOutflowCaixas(previousRows, currentRows) {
     total += Math.max(0, previousTotal - currentTotal);
   });
   return total;
+}
+
+function buildComparisonReport(previousRows, currentRows) {
+  const previousAggregated = aggregateRows(previousRows);
+  const currentAggregated = aggregateRows(currentRows);
+  const previousMap = new Map();
+  const currentMap = new Map();
+
+  previousAggregated.forEach((row) => {
+    previousMap.set(buildInventoryIdentityKey(row), hydrateInventoryRow(row));
+  });
+  currentAggregated.forEach((row) => {
+    currentMap.set(buildInventoryIdentityKey(row), hydrateInventoryRow(row));
+  });
+
+  const items = [];
+  previousMap.forEach((previousRow, key) => {
+    const currentRow = currentMap.get(key);
+    const previousTotal = toNonNegativeInt(previousRow.total_caixas, 0);
+    const currentTotal = toNonNegativeInt(currentRow?.total_caixas, 0);
+    const saidaCaixas = Math.max(0, previousTotal - currentTotal);
+
+    if (!saidaCaixas) return;
+
+    items.push({
+      setor: previousRow.setor,
+      produto: previousRow.produto,
+      marca: previousRow.marca,
+      tipo: previousRow.tipo,
+      caixas_pallet: previousRow.caixas_pallet || currentRow?.caixas_pallet || 0,
+      previous_pallets: toNonNegativeInt(previousRow.pallets, 0),
+      previous_caixas_avulsas: toNonNegativeInt(previousRow.caixas_avulsas, 0),
+      previous_total_caixas: previousTotal,
+      current_pallets: toNonNegativeInt(currentRow?.pallets, 0),
+      current_caixas_avulsas: toNonNegativeInt(currentRow?.caixas_avulsas, 0),
+      current_total_caixas: currentTotal,
+      saida_caixas: saidaCaixas,
+    });
+  });
+
+  items.sort((a, b) => {
+    const bySaida = b.saida_caixas - a.saida_caixas;
+    if (bySaida !== 0) return bySaida;
+    const bySetor = a.setor.localeCompare(b.setor);
+    if (bySetor !== 0) return bySetor;
+    const byProduto = a.produto.localeCompare(b.produto);
+    if (byProduto !== 0) return byProduto;
+    const byMarca = a.marca.localeCompare(b.marca);
+    if (byMarca !== 0) return byMarca;
+    return toNonNegativeInt(a.tipo, 0) - toNonNegativeInt(b.tipo, 0);
+  });
+
+  const totalSaida = items.reduce((sum, item) => sum + item.saida_caixas, 0);
+
+  return {
+    created_at: new Date().toISOString(),
+    total_saida_caixas: totalSaida,
+    itens_com_saida: items.length,
+    items,
+  };
+}
+
+function saveComparisonReport(report) {
+  state.lastComparisonReport = report || null;
+  try {
+    if (!report) {
+      localStorage.removeItem(LAST_COMPARISON_KEY);
+    } else {
+      localStorage.setItem(LAST_COMPARISON_KEY, JSON.stringify(report));
+    }
+  } catch (error) {
+    console.warn("Nao foi possivel salvar o relatorio de saida.", error);
+  }
+  renderComparisonReport();
+}
+
+function loadComparisonReport() {
+  try {
+    const raw = localStorage.getItem(LAST_COMPARISON_KEY);
+    state.lastComparisonReport = raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    console.warn("Nao foi possivel carregar o relatorio de saida.", error);
+    state.lastComparisonReport = null;
+  }
+  renderComparisonReport();
+}
+
+function formatInventorySnapshot(pallets, caixasAvulsas, totalCaixas) {
+  const stack = formatInventoryStack(pallets, caixasAvulsas);
+  if (stack) {
+    return `${stack} (${formatNumber(totalCaixas)})`;
+  }
+  return formatNumber(totalCaixas);
+}
+
+function renderComparisonReport() {
+  if (PAGE_MODE !== "dashboard") return;
+  if (!elements.comparisonBody || !elements.comparisonMeta) return;
+
+  const report = state.lastComparisonReport;
+  elements.comparisonBody.innerHTML = "";
+
+  if (!report) {
+    elements.comparisonMeta.textContent = "Ainda nao existe comparacao salva.";
+    const empty = document.createElement("p");
+    empty.className = "msg info";
+    empty.textContent =
+      "Finalize uma nova contagem para ver quais itens sairam em relacao ao estoque anterior.";
+    elements.comparisonBody.appendChild(empty);
+    return;
+  }
+
+  const totalSaida = toNonNegativeInt(report.total_saida_caixas, 0);
+  const itensComSaida = toNonNegativeInt(report.itens_com_saida, 0);
+  const createdAt = formatDateTime(report.created_at);
+  elements.comparisonMeta.textContent = `${formatNumber(totalSaida)} caixas sairam em ${itensComSaida} item(ns). Comparado em ${createdAt}.`;
+
+  if (!report.items?.length) {
+    const empty = document.createElement("p");
+    empty.className = "msg success";
+    empty.textContent = "Nenhuma saida encontrada na ultima comparacao.";
+    elements.comparisonBody.appendChild(empty);
+    return;
+  }
+
+  const wrap = document.createElement("div");
+  wrap.className = "table-wrap comparison-wrap";
+
+  const table = document.createElement("table");
+  table.className = "comparison-table";
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>Setor</th>
+        <th>Produto</th>
+        <th>Marca</th>
+        <th>Tipo</th>
+        <th>Antes</th>
+        <th>Agora</th>
+        <th>Saida</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  `;
+
+  const tbody = table.querySelector("tbody");
+  report.items.forEach((item) => {
+    const tr = document.createElement("tr");
+    const tipoLabel = formatTipoLabelValue(item.produto, item.tipo, item.marca);
+    tr.innerHTML = `
+      <td>${item.setor}</td>
+      <td>${item.produto}</td>
+      <td>${item.marca}</td>
+      <td>${tipoLabel}</td>
+      <td>${formatInventorySnapshot(
+        item.previous_pallets,
+        item.previous_caixas_avulsas,
+        item.previous_total_caixas
+      )}</td>
+      <td>${formatInventorySnapshot(
+        item.current_pallets,
+        item.current_caixas_avulsas,
+        item.current_total_caixas
+      )}</td>
+      <td class="comparison-loss">${formatNumber(item.saida_caixas)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  wrap.appendChild(table);
+  elements.comparisonBody.appendChild(wrap);
 }
 
 function formatSummaryValue(value, showZero = false) {
@@ -2343,6 +2523,7 @@ function attachChartHover(canvas, tooltip, key) {
 
 function setupDashboard() {
   if (PAGE_MODE !== "dashboard") return;
+  loadComparisonReport();
   if (elements.chartRange) {
     const active = elements.chartRange.querySelector(".range-btn.active");
     if (active?.dataset?.range) {
@@ -4430,6 +4611,11 @@ async function saveNewCount() {
     const currentPublicRows = aggregateRows(
       cloneInventoryRows(state.rawPublicRows?.length ? state.rawPublicRows : state.publicRows)
     );
+    const comparisonReport = buildComparisonReport(
+      previousPublicRows.length ? previousPublicRows : previousRows,
+      currentPublicRows.length ? currentPublicRows : currentRows
+    );
+    saveComparisonReport(comparisonReport);
     const outflowCaixas = calculateOutflowCaixas(
       previousPublicRows.length ? previousPublicRows : previousRows,
       currentPublicRows.length ? currentPublicRows : currentRows
