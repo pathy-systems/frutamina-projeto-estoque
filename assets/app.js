@@ -44,6 +44,9 @@ const CONFIG_GERAL = {
       SAMBA: (t) => 84,
       BRAZIL: (t) => 84,
     },
+    ORANGE: {
+      BAHIA: (t) => 130,
+    },
   },
   ITAUEIRA: {
     AMARELO: {
