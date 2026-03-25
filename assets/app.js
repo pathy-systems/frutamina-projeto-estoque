@@ -843,6 +843,11 @@ function normalizeText(text) {
     CEP: "CEPI",
     BRASIL: "BRAZIL",
     ORANAGE: "ORANGE",
+    ROSA: "COSA",
+    COSTA: "COSA",
+    COZA: "COSA",
+    KOSA: "COSA",
+    KOZA: "COSA",
   };
 
   return tokens.map((token) => tokenMap[token] || token).join(" ").trim();
