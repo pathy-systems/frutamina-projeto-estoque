@@ -860,7 +860,9 @@ const TIPO_MAX = 15;
 const SPECIAL_TIPO_VARIANTS = {
   ORANGE: [
     {
-      value: 14,
+      value: 601,
+      baseValue: 6,
+      sortOrder: 61,
       label: "6A",
       matchSequences: [
         ["6", "A"],
@@ -868,7 +870,9 @@ const SPECIAL_TIPO_VARIANTS = {
       ],
     },
     {
-      value: 15,
+      value: 602,
+      baseValue: 6,
+      sortOrder: 62,
       label: "6B",
       matchSequences: [
         ["6", "B"],
@@ -908,13 +912,71 @@ function getSpecialTipoVariants(produto) {
   return SPECIAL_TIPO_VARIANTS[normalizeText(produto)] || [];
 }
 
-function getSpecialTipoLabel(produto, tipo) {
+function getSpecialTipoVariantByValue(produto, tipo) {
   const numericTipo = Number.parseInt(tipo, 10);
   if (!Number.isFinite(numericTipo)) return null;
   return (
-    getSpecialTipoVariants(produto).find((variant) => variant.value === numericTipo)
-      ?.label || null
+    getSpecialTipoVariants(produto).find((variant) => variant.value === numericTipo) ||
+    null
   );
+}
+
+function isSpecialTipoVariantValue(produto, tipo) {
+  return Boolean(getSpecialTipoVariantByValue(produto, tipo));
+}
+
+function isSplitTipoBase(produto, tipo) {
+  const numericTipo = Number.parseInt(tipo, 10);
+  if (!Number.isFinite(numericTipo)) return false;
+  return getSpecialTipoVariants(produto).some(
+    (variant) => variant.baseValue === numericTipo
+  );
+}
+
+function getTipoRuleValue(produto, tipo) {
+  const specialVariant = getSpecialTipoVariantByValue(produto, tipo);
+  if (specialVariant) {
+    return specialVariant.baseValue;
+  }
+  const numericTipo = Number.parseInt(tipo, 10);
+  return Number.isFinite(numericTipo) ? numericTipo : tipo;
+}
+
+function getTipoSortOrder(produto, tipo) {
+  const specialVariant = getSpecialTipoVariantByValue(produto, tipo);
+  if (specialVariant) {
+    return specialVariant.sortOrder;
+  }
+  const numericTipo = Number.parseInt(tipo, 10);
+  return Number.isFinite(numericTipo) ? numericTipo * 10 : 0;
+}
+
+function getTipoExampleHint(produto) {
+  if (hasSpecialTipoVariants(produto)) {
+    return "5, 6A ou 6B";
+  }
+  return "4";
+}
+
+function buildTipoOptionList(produto) {
+  const options = [];
+  for (let tipo = TIPO_MIN; tipo <= TIPO_MAX; tipo += 1) {
+    const variants = getSpecialTipoVariants(produto).filter(
+      (variant) => variant.baseValue === tipo
+    );
+    if (variants.length) {
+      variants.forEach((variant) => {
+        options.push({ value: String(variant.value), label: variant.label });
+      });
+      continue;
+    }
+    options.push({ value: String(tipo), label: String(tipo) });
+  }
+  return options;
+}
+
+function getSpecialTipoLabel(produto, tipo) {
+  return getSpecialTipoVariantByValue(produto, tipo)?.label || null;
 }
 
 function hasSpecialTipoVariants(produto) {
@@ -922,18 +984,19 @@ function hasSpecialTipoVariants(produto) {
 }
 
 function isTipoValidForContext(produto, tipo) {
+  if (isSpecialTipoVariantValue(produto, tipo)) {
+    return true;
+  }
   const numericTipo = Number.parseInt(tipo, 10);
   if (!Number.isFinite(numericTipo)) return false;
-  const specialVariants = getSpecialTipoVariants(produto);
-  if (specialVariants.length) {
-    return specialVariants.some((variant) => variant.value === numericTipo);
-  }
-  return isTipoValid(numericTipo);
+  if (!isTipoValid(numericTipo)) return false;
+  if (isSplitTipoBase(produto, numericTipo)) return false;
+  return true;
 }
 
 function getTipoValidationMessage(produto) {
   if (hasSpecialTipoVariants(produto)) {
-    return "Para ORANGE, use 6A ou 6B.";
+    return "Para ORANGE, use os tipos de 3 a 15. No tipo 6, informe 6A ou 6B.";
   }
   return "Tipo deve estar entre 3 e 15.";
 }
@@ -943,6 +1006,7 @@ function parseTipoInputValue(value, produto) {
   if (!normalizedValue) return null;
 
   const specialMatch = getSpecialTipoVariants(produto).find((variant) =>
+    variant.label === normalizedValue ||
     variant.matchSequences.some((sequence) => sequence.join(" ") === normalizedValue)
   );
   if (specialMatch) {
@@ -982,6 +1046,20 @@ function containsTokenSequence(tokens, sequence) {
     if (match) return true;
   }
   return false;
+}
+
+function matchSpecialTipoAtTokens(produto, tokens, index) {
+  const variants = getSpecialTipoVariants(produto);
+  if (!variants.length) return null;
+  for (const variant of variants) {
+    const sequence = variant.matchSequences.find((candidate) =>
+      candidate.every((token, offset) => tokens[index + offset] === token)
+    );
+    if (sequence) {
+      return { value: variant.value, length: sequence.length };
+    }
+  }
+  return null;
 }
 
 function findExactMatch(tokens, map) {
@@ -1071,11 +1149,15 @@ function extractCommandTokens(text, ignoredValues = []) {
   return tokens.filter((token, index) => !ignoredIndexes.has(index));
 }
 
-function extractCommandNumbers(text, ignoredValues = []) {
+function extractCommandNumbers(text, ignoredValues = [], produto = "") {
   const tokens = extractCommandTokens(text, ignoredValues);
   if (!tokens.length) return [];
 
   return tokens.reduce((results, token, index) => {
+    const specialMatch = matchSpecialTipoAtTokens(produto, tokens, index);
+    if (specialMatch) {
+      return results;
+    }
     if (/^\d+$/.test(token)) {
       results.push(Number.parseInt(token, 10));
       return results;
@@ -1088,26 +1170,41 @@ function extractCommandNumbers(text, ignoredValues = []) {
 }
 
 function extractSpecialTipoSequence(text, produto, ignoredValues = []) {
-  const variants = getSpecialTipoVariants(produto);
-  if (!variants.length) return [];
-
   const tokens = extractCommandTokens(text, ignoredValues);
   const results = [];
 
   for (let index = 0; index < tokens.length; index += 1) {
-    let matched = null;
-    for (const variant of variants) {
-      const sequence = variant.matchSequences.find((candidate) =>
-        candidate.every((token, offset) => tokens[index + offset] === token)
-      );
-      if (sequence) {
-        matched = { value: variant.value, length: sequence.length };
-        break;
-      }
-    }
+    const matched = matchSpecialTipoAtTokens(produto, tokens, index);
     if (matched) {
       results.push(matched.value);
       index += matched.length - 1;
+    }
+  }
+
+  return results;
+}
+
+function extractCommandTipoValues(text, produto, ignoredValues = []) {
+  if (!produto) return [];
+  const tokens = extractCommandTokens(text, ignoredValues);
+  if (!tokens.length) return [];
+
+  const results = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    const specialMatch = matchSpecialTipoAtTokens(produto, tokens, index);
+    if (specialMatch) {
+      results.push(specialMatch.value);
+      index += specialMatch.length - 1;
+      continue;
+    }
+
+    const token = tokens[index];
+    if (/^\d+$/.test(token)) {
+      results.push(Number.parseInt(token, 10));
+      continue;
+    }
+    if (Object.prototype.hasOwnProperty.call(NUMBER_WORDS, token)) {
+      results.push(NUMBER_WORDS[token]);
     }
   }
 
@@ -1770,7 +1867,7 @@ function buildComparisonReport(previousRows, currentRows) {
     if (byProduto !== 0) return byProduto;
     const byMarca = a.marca.localeCompare(b.marca);
     if (byMarca !== 0) return byMarca;
-    return toNonNegativeInt(a.tipo, 0) - toNonNegativeInt(b.tipo, 0);
+    return getTipoSortOrder(a.produto, a.tipo) - getTipoSortOrder(b.produto, b.tipo);
   });
 
   const totalSaida = items.reduce((sum, item) => sum + item.saida_caixas, 0);
@@ -1966,7 +2063,9 @@ function buildSummaryGroups(rows) {
     .map((group) => ({
       ...group,
       brands: Array.from(group.brands).sort(),
-      tipos: Array.from(group.tipos).sort((a, b) => a - b),
+      tipos: Array.from(group.tipos).sort(
+        (a, b) => getTipoSortOrder(group.produto, a) - getTipoSortOrder(group.produto, b)
+      ),
     }))
     .sort((a, b) => {
       const setorDiff = a.setor.localeCompare(b.setor);
@@ -3185,7 +3284,9 @@ function buildAllBrandMap(products) {
 
 function formatTipoCounts(tipoCounts, produto, marca = "") {
   return Array.from(tipoCounts.entries())
-    .sort((a, b) => a[0] - b[0])
+    .sort(
+      (a, b) => getTipoSortOrder(produto, a[0]) - getTipoSortOrder(produto, b[0])
+    )
     .map(([tipo, count]) => {
       const tipoLabel = formatTipoLabelValue(produto, tipo, marca);
       return count > 1 ? `${tipoLabel}x${count}` : String(tipoLabel);
@@ -3353,14 +3454,14 @@ async function handlePendingCorrection(rawText) {
     item.setor,
     item.produto,
     item.marca,
-  ])
+  ], item.produto)
     .map((value) => Number.parseInt(value, 10))
     .filter((value) => Number.isFinite(value) && value > 0);
-  const specialTipos = extractSpecialTipoSequence(
+  const tipoValues = extractCommandTipoValues(
     rawText,
     item.produto,
     ignoredValues
-  );
+  ).filter((value) => Number.isFinite(value) && value > 0);
   const setor = item.setor;
   const produto = item.produto;
   const marca = item.marca;
@@ -3376,14 +3477,14 @@ async function handlePendingCorrection(rawText) {
   let nextParams = null;
 
   if (correction.correctionMode === "type") {
-    const tipoCorrigido =
-      specialTipos[0] ??
-      numericValues.find((value) => isTipoValidForContext(produto, value));
+    const tipoCorrigido = tipoValues.find((value) =>
+      isTipoValidForContext(produto, value)
+    );
     if (!Number.isFinite(tipoCorrigido)) {
       pushMessage(
         "warn",
         hasSpecialTipoVariants(produto)
-          ? "Diga o tipo correto para corrigir o ultimo lancamento (ex: 6A ou 6B)."
+          ? `Diga o tipo correto para corrigir o ultimo lancamento (ex: ${getTipoExampleHint(produto)}).`
           : "Diga o tipo correto para corrigir o ultimo lancamento."
       );
       return true;
@@ -3395,7 +3496,7 @@ async function handlePendingCorrection(rawText) {
       produto,
       marca,
       tipo: tipoCorrigido,
-      caixasPallet: regra(tipoCorrigido),
+      caixasPallet: regra(getTipoRuleValue(produto, tipoCorrigido)),
       palletsDelta: item.palletsDelta || 1,
       caixasAvulsasDelta: item.caixasAvulsasDelta || 0,
       successPrefix: "Corrigido",
@@ -3430,7 +3531,9 @@ async function handlePendingCorrection(rawText) {
         produto,
         marca,
         tipo: noTipo ? NO_TIPO_VALUE : item.tipo,
-        caixasPallet: regra(noTipo ? NO_TIPO_VALUE : item.tipo),
+        caixasPallet: regra(
+          noTipo ? NO_TIPO_VALUE : getTipoRuleValue(produto, item.tipo)
+        ),
         palletsDelta: 0,
         caixasAvulsasDelta: quantidade,
         successPrefix: "Corrigido",
@@ -3447,7 +3550,9 @@ async function handlePendingCorrection(rawText) {
         produto,
         marca,
         tipo: noTipo ? NO_TIPO_VALUE : item.tipo,
-        caixasPallet: regra(noTipo ? NO_TIPO_VALUE : item.tipo),
+        caixasPallet: regra(
+          noTipo ? NO_TIPO_VALUE : getTipoRuleValue(produto, item.tipo)
+        ),
         palletsDelta: quantidade,
         caixasAvulsasDelta: 0,
         successPrefix: "Corrigido",
@@ -3578,13 +3683,16 @@ async function processCommand(rawText) {
     state.produto,
     state.marca,
   ];
-  const numericValues = extractCommandNumbers(rawText, ignoredValues)
+  const numericValues = extractCommandNumbers(rawText, ignoredValues, state.produto)
     .map((value) => Number.parseInt(value, 10))
     .filter((value) => Number.isFinite(value) && value > 0);
-  const specialTipos = extractSpecialTipoSequence(
+  const tipoValues = extractCommandTipoValues(
     rawText,
     state.produto,
     ignoredValues
+  ).filter((value) => Number.isFinite(value) && value > 0);
+  const specialTipos = tipoValues.filter((value) =>
+    isSpecialTipoVariantValue(state.produto, value)
   );
   const noTipo = isNoTipoContext(state.produto, state.marca);
   const addCommand = isAddCommand(rawText);
@@ -3633,7 +3741,7 @@ async function processCommand(rawText) {
       pushMessage(
         "warn",
         hasSpecialTipoVariants(state.produto)
-          ? "Diga o tipo primeiro (ex: 6A ou 6B) para somar caixas avulsas."
+          ? `Diga o tipo primeiro (ex: ${getTipoExampleHint(state.produto)}) para somar caixas avulsas.`
           : "Diga o tipo primeiro (ex: REI 4) para somar caixas avulsas."
       );
       renderContext();
@@ -3646,7 +3754,7 @@ async function processCommand(rawText) {
     }
 
     const caixasAvulsasDelta = numericValues[numericValues.length - 1];
-    const caixasPallet = regra(tipoParaAdicionar);
+    const caixasPallet = regra(getTipoRuleValue(state.produto, tipoParaAdicionar));
     const tipoLabel = formatTipoLabelValue(
       state.produto,
       tipoParaAdicionar,
@@ -3716,7 +3824,7 @@ async function processCommand(rawText) {
       pushMessage(
         "warn",
         hasSpecialTipoVariants(state.produto)
-          ? "Diga o tipo primeiro (ex: 6A ou 6B) para usar 'adicionar'."
+          ? `Diga o tipo primeiro (ex: ${getTipoExampleHint(state.produto)}) para usar 'adicionar'.`
           : "Diga o tipo primeiro (ex: REI 4) para usar 'adicionar'."
       );
       renderContext();
@@ -3728,7 +3836,7 @@ async function processCommand(rawText) {
       return;
     }
 
-    const caixasPallet = regra(tipoParaAdicionar);
+    const caixasPallet = regra(getTipoRuleValue(state.produto, tipoParaAdicionar));
     const palletsDelta = quantity;
     const tipoLabel = formatTipoLabelValue(
       state.produto,
@@ -3834,9 +3942,9 @@ async function processCommand(rawText) {
       return;
     }
 
-    const tiposValid = hasSpecialTipoVariants(state.produto)
-      ? specialTipos
-      : numericValues.filter((value) => isTipoValid(value));
+    const tiposValid = tipoValues.filter((value) =>
+      isTipoValidForContext(state.produto, value)
+    );
 
     if (!tiposValid.length) {
       pushMessage("warn", getTipoValidationMessage(state.produto));
@@ -3872,12 +3980,12 @@ async function processCommand(rawText) {
       produto: state.produto,
       marca: state.marca,
       tipo,
-      caixasPallet: regra(tipo),
+      caixasPallet: regra(getTipoRuleValue(state.produto, tipo)),
       palletsDelta: count,
     }));
     if (state.countMode === "new") {
       tipoCounts.forEach((count, tipo) => {
-        const caixasPallet = regra(tipo);
+        const caixasPallet = regra(getTipoRuleValue(state.produto, tipo));
         updateSessionAggregateRecord({
           setor: state.setor,
           produto: state.produto,
@@ -3905,7 +4013,7 @@ async function processCommand(rawText) {
       }
     } else {
       tipoCounts.forEach((count, tipo) => {
-        const caixasPallet = regra(tipo);
+        const caixasPallet = regra(getTipoRuleValue(state.produto, tipo));
         updateAggregateRecord({
           setor: state.setor,
           produto: state.produto,
@@ -3924,7 +4032,7 @@ async function processCommand(rawText) {
 
       const upserts = [];
       tipoCounts.forEach((count, tipo) => {
-        const caixasPallet = regra(tipo);
+        const caixasPallet = regra(getTipoRuleValue(state.produto, tipo));
         upserts.push(
           upsertRecord({
             setor: state.setor,
@@ -5092,10 +5200,10 @@ function updateManualTipoOptions() {
     empty.value = "";
     empty.textContent = "Selecione";
     elements.manualTipo.appendChild(empty);
-    getSpecialTipoVariants(produto).forEach((variant) => {
+    buildTipoOptionList(produto).forEach((tipoOption) => {
       const option = document.createElement("option");
-      option.value = String(variant.value);
-      option.textContent = variant.label;
+      option.value = tipoOption.value;
+      option.textContent = tipoOption.label;
       elements.manualTipo.appendChild(option);
     });
     if (
@@ -5131,7 +5239,7 @@ function getManualCaixasPallet() {
     ? NO_TIPO_VALUE
     : parseTipoInputValue(elements.manualTipo?.value, produto);
   if (!noTipo && !isTipoValidForContext(produto, tipo)) return 0;
-  return toNonNegativeInt(regra(tipo), 0);
+  return toNonNegativeInt(regra(getTipoRuleValue(produto, tipo)), 0);
 }
 
 function updateManualBoxesOptions() {
@@ -5280,7 +5388,7 @@ async function addManualItem() {
   }
 
   const tipo = noTipo ? NO_TIPO_VALUE : tipoInput;
-  const caixasPallet = regra(tipo);
+  const caixasPallet = regra(noTipo ? NO_TIPO_VALUE : getTipoRuleValue(produto, tipo));
   const palletsDelta = pallets;
   const tipoLabel = formatTipoLabelValue(produto, tipo, marca);
 
