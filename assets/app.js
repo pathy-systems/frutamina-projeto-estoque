@@ -39,6 +39,7 @@ const CONFIG_GERAL = {
       "SAMBA REDE": (t) => 77,
       LOLA: (t) => 66,
       BAHIA: (t) => 66,
+      COSA: (t) => 66,
   
     },
     "MELANCIA (CHAO)": {
