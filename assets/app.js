@@ -9,6 +9,17 @@ const PUBLIC_CACHE_AT_KEY = "cd_public_cache_at";
 const COUNT_DRAFT_KEY_PREFIX = "cd_count_draft_v1";
 const LAST_COMPARISON_KEY = "cd_last_comparison_v1";
 
+/*
+  Arquivo central do sistema.
+
+  Responsabilidades principais:
+  - manter as regras de negocio do estoque por setor/produto/marca;
+  - processar voz, formulario manual e edicao;
+  - salvar/recuperar o rascunho offline da nova contagem;
+  - sincronizar dados com o Supabase;
+  - montar dashboard, comparacao de saida e exportacoes.
+*/
+
 const CONFIG_GERAL = {
   CHAO: {
     AMARELO: {
@@ -141,6 +152,7 @@ const BOX_KEYWORDS = new Set([
 const REMOVE_KEYWORDS = new Set(["REMOVER", "REMOVA", "DESFAZER"]);
 const CORRECT_KEYWORDS = new Set(["CORRIGIR", "CORRIGE", "CORRECAO"]);
 
+// Estado global compartilhado entre as paginas. Cada tela usa apenas parte dele.
 const state = {
   setor: Object.keys(CONFIG_GERAL)[0],
   produto: null,
@@ -196,6 +208,17 @@ function toNonNegativeInt(value, fallback = 0) {
   return Math.max(0, toInt(value, fallback));
 }
 
+/*
+  ===== Utilitarios de inventario =====
+  Estas funcoes garantem que pallets, caixas avulsas e total de caixas
+  fiquem consistentes em qualquer parte do sistema.
+*/
+
+/**
+ * Regra central das metricas:
+ * total_caixas = pallets * caixas_pallet + caixas_avulsas.
+ * Se as caixas avulsas fecharem um pallet completo, a conversao e automatica.
+ */
 function normalizeInventoryMetrics({
   caixasPallet,
   pallets = 0,
@@ -310,6 +333,7 @@ function formatInventoryMessage(pallets, caixasAvulsas) {
   return "0";
 }
 
+// Estruturas auxiliares para desfazer/remover/corrigir o ultimo lancamento por voz.
 function buildLaunchItem({
   setor,
   produto,
@@ -656,6 +680,7 @@ function isLooseBoxesSchemaError(error) {
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Cache dos elementos de DOM usados ao longo do arquivo para evitar buscas repetidas.
 const elements = {
   menuView: document.getElementById("menu-view"),
   menuDashboard: document.getElementById("menu-dashboard"),
@@ -782,6 +807,12 @@ const elements = {
 };
 
 const PAGE_MODE = document.body?.dataset?.page || "view";
+
+/*
+  ===== Regras de linguagem / voz =====
+  Esta camada normaliza transcricoes, converte apelidos de fala e identifica
+  tipos especiais como 6A/6B no ORANGE.
+*/
 
 function normalizeText(text) {
   const base = (text || "")
@@ -1091,6 +1122,11 @@ function isCorrectCommand(text) {
   const tokens = tokenizeText(text);
   return tokens.some((token) => CORRECT_KEYWORDS.has(token));
 }
+
+/*
+  ===== Mensagens de interface, cache e rascunho offline =====
+  Tudo que ajuda o usuario a acompanhar o estado da contagem passa por aqui.
+*/
 
 function pushMessage(type, text) {
   if (!elements.messages) return;
@@ -1429,6 +1465,11 @@ function setAuthMessage(type, text) {
   elements.authMsg.appendChild(msg);
 }
 
+/*
+  ===== Datas, usuario e sessao =====
+  Mantem os textos de "ultima atualizacao", o nome do usuario e a expiracao do login.
+*/
+
 function formatDateTime(value) {
   if (!value) return "--";
   const date = value instanceof Date ? value : new Date(value);
@@ -1565,6 +1606,11 @@ function renderContext() {
   }
 }
 
+/*
+  ===== Agregacao e comparacao =====
+  Aqui nascem os totais por item, a soma da saida e o relatorio "o que saiu?".
+*/
+
 function aggregateRows(rows) {
   const map = new Map();
   (rows || []).forEach((row) => {
@@ -1620,6 +1666,57 @@ function calculateOutflowCaixas(previousRows, currentRows) {
   return total;
 }
 
+/**
+ * Reconstroi o estoque publico "apos salvar" sem depender de uma nova leitura do servidor.
+ * Isso evita perder a comparacao caso o usuario troque de pagina logo depois de salvar.
+ */
+function buildPublicRowsAfterUserReplacement(
+  previousPublicRows,
+  previousUserRows,
+  currentUserRows
+) {
+  const totalsMap = new Map();
+
+  const applyRows = (rows, direction = 1) => {
+    aggregateRows(rows).forEach((row) => {
+      const normalizedRow = hydrateInventoryRow(row);
+      const key = buildInventoryIdentityKey(normalizedRow);
+      const current = totalsMap.get(key);
+      const currentTotal = current ? toNonNegativeInt(current.total_caixas, 0) : 0;
+      const nextTotal = Math.max(
+        0,
+        currentTotal + direction * toNonNegativeInt(normalizedRow.total_caixas, 0)
+      );
+
+      if (!nextTotal) {
+        totalsMap.delete(key);
+        return;
+      }
+
+      totalsMap.set(key, {
+        ...(current || {}),
+        setor: normalizedRow.setor,
+        produto: normalizedRow.produto,
+        marca: normalizedRow.marca,
+        tipo: normalizedRow.tipo,
+        caixas_pallet:
+          normalizedRow.caixas_pallet || current?.caixas_pallet || 0,
+        total_caixas: nextTotal,
+      });
+    });
+  };
+
+  applyRows(previousPublicRows, 1);
+  applyRows(previousUserRows, -1);
+  applyRows(currentUserRows, 1);
+
+  return Array.from(totalsMap.values()).map((row) => hydrateInventoryRow(row));
+}
+
+/**
+ * Monta a comparacao detalhada entre a contagem anterior e a atual.
+ * O foco e listar apenas os itens que perderam caixas (saida > 0).
+ */
 function buildComparisonReport(previousRows, currentRows) {
   const previousAggregated = aggregateRows(previousRows);
   const currentAggregated = aggregateRows(currentRows);
@@ -1790,6 +1887,11 @@ function renderComparisonReport() {
   wrap.appendChild(table);
   elements.comparisonBody.appendChild(wrap);
 }
+
+/*
+  ===== Resumos matriciais =====
+  Gera as tabelas-resumo por produto/marca/tipo usadas na visualizacao e na impressao.
+*/
 
 function formatSummaryValue(value, showZero = false) {
   if (value === null || value === undefined) return "";
@@ -2087,6 +2189,11 @@ function renderCountSummary() {
     colorizeFirst: true,
   });
 }
+
+/*
+  ===== Dashboard =====
+  Construcao dos graficos de total do CD e da saida de caixas ao longo do tempo.
+*/
 
 function formatNumber(value) {
   if (!Number.isFinite(value)) return "--";
@@ -2662,6 +2769,11 @@ function setupDashboard() {
   );
 }
 
+/*
+  ===== Tabelas principais =====
+  Renderizam a tela publica de estoque e a tabela de contagem do usuario logado.
+*/
+
 function renderPublicTable() {
   if (!elements.publicTableBody || !elements.publicTotalGeral) return;
   elements.publicTableBody.innerHTML = "";
@@ -2824,6 +2936,11 @@ function getTotalCaixas(rows) {
     return sum + normalizedRow.total_caixas;
   }, 0);
 }
+
+/*
+  ===== Supabase =====
+  Toda leitura e escrita do banco foi centralizada aqui para facilitar manutencao.
+*/
 
 async function loadSnapshotRecords(options = {}) {
   const { showError = false } = options;
@@ -3036,6 +3153,11 @@ async function upsertRecord({
   }
   return true;
 }
+
+/*
+  ===== Parser e execucao dos comandos de voz =====
+  Este bloco decide como um texto reconhecido vira contexto ou lancamento.
+*/
 
 function buildMaps(setor) {
   const products = CONFIG_GERAL[setor] || {};
@@ -3360,6 +3482,14 @@ async function handlePendingCorrection(rawText) {
   return true;
 }
 
+/**
+ * Interpreta o comando final da voz.
+ * Ordem da leitura:
+ * - comandos especiais (remover/corrigir);
+ * - travas de contexto (setor/produto/marca);
+ * - tipo e quantidade;
+ * - gravacao do item no modo atual ou na nova contagem.
+ */
 async function processCommand(rawText) {
   const tokens = tokenizeText(rawText);
   if (!tokens.length) return;
@@ -3824,6 +3954,7 @@ async function processCommand(rawText) {
   renderContext();
 }
 
+// Inicializa a Web Speech API e encaminha cada frase final para `processCommand`.
 function setupVoice() {
   if (PAGE_MODE !== "edit") return;
   if (!elements.voiceBtn) return;
@@ -3932,6 +4063,11 @@ function setupVoice() {
     }
   };
 }
+
+/*
+  ===== Exportacao e impressao =====
+  Compartilhado pelas tabelas de estoque publico e de contagem.
+*/
 
 function exportRows(rows, filename) {
   if (!rows.length) {
@@ -4129,6 +4265,11 @@ function closeExportSheet(scope) {
   const sheet = scope === "public" ? elements.publicExportSheet : elements.countExportSheet;
   if (sheet) sheet.classList.add("hidden");
 }
+
+/*
+  ===== Edicao, autenticacao visual e agregacao da sessao =====
+  Aqui ficam o modal de edicao, a troca entre login/painel e a soma local da nova contagem.
+*/
 
 function showAuthPanel() {
   if (elements.authPanel) {
@@ -4632,6 +4773,10 @@ function hideAuthPanel() {
   if (elements.authPanel) elements.authPanel.classList.add("hidden");
 }
 
+/*
+  ===== Modo de contagem =====
+  Controla a diferenca entre "estoque atual" e "nova contagem" com rascunho offline.
+*/
 
 function updateCountModeUI() {
   if (elements.modeCurrentBtn && elements.modeNewBtn) {
@@ -4703,6 +4848,12 @@ function setCountMode(mode) {
   renderCountTable();
 }
 
+/**
+ * Finaliza a nova contagem:
+ * - substitui os registros antigos do usuario;
+ * - salva snapshot do dashboard;
+ * - registra a comparacao detalhada da ultima contagem.
+ */
 async function saveNewCount() {
   if (!state.user) {
     pushMessage("warn", "Faça login para salvar a nova contagem.");
@@ -4727,6 +4878,9 @@ async function saveNewCount() {
   const previousPublicRows = state.previousPublicRows.length
     ? cloneInventoryRows(state.previousPublicRows)
     : getCurrentPublicAggregateRows();
+  const comparisonPreviousRows = previousPublicRows.length
+    ? previousPublicRows
+    : previousRows;
   const confirmed = window.confirm(
     "Salvar nova contagem? Isso vai apagar a contagem antiga e substituir pela nova."
   );
@@ -4774,6 +4928,26 @@ async function saveNewCount() {
       return;
     }
 
+    const currentPublicRows = buildPublicRowsAfterUserReplacement(
+      comparisonPreviousRows,
+      previousRows,
+      currentRows
+    );
+    const comparisonReport = buildComparisonReport(
+      comparisonPreviousRows,
+      currentPublicRows.length ? currentPublicRows : currentRows
+    );
+    saveComparisonReport(comparisonReport);
+    const outflowCaixas = calculateOutflowCaixas(
+      comparisonPreviousRows,
+      currentPublicRows.length ? currentPublicRows : currentRows
+    );
+    const snapshotSaved = await saveSnapshotRecord({
+      rows: currentPublicRows.length ? currentPublicRows : currentRows,
+      outflowCaixas,
+      showSuccess: false,
+    });
+
     state.sessionRows = [];
     state.previousCountRows = [];
     state.previousPublicRows = [];
@@ -4784,23 +4958,6 @@ async function saveNewCount() {
     renderContext();
     await loadUserRecords();
     await loadPublicRecords();
-    const currentPublicRows = aggregateRows(
-      cloneInventoryRows(state.rawPublicRows?.length ? state.rawPublicRows : state.publicRows)
-    );
-    const comparisonReport = buildComparisonReport(
-      previousPublicRows.length ? previousPublicRows : previousRows,
-      currentPublicRows.length ? currentPublicRows : currentRows
-    );
-    saveComparisonReport(comparisonReport);
-    const outflowCaixas = calculateOutflowCaixas(
-      previousPublicRows.length ? previousPublicRows : previousRows,
-      currentPublicRows.length ? currentPublicRows : currentRows
-    );
-    const snapshotSaved = await saveSnapshotRecord({
-      rows: currentPublicRows.length ? currentPublicRows : currentRows,
-      outflowCaixas,
-      showSuccess: false,
-    });
     pushMessage(
       snapshotSaved ? "success" : "warn",
       snapshotSaved
@@ -4832,6 +4989,11 @@ function discardNewCount() {
   renderCountTable();
   pushMessage("info", "Nova contagem descartada.");
 }
+
+/*
+  ===== Formulario manual, selects dependentes e filtros =====
+  Este bloco controla os campos em cascata (setor > produto > marca > tipo).
+*/
 
 function openFilterModal() {
   if (!elements.filterModal) return;
@@ -5182,6 +5344,11 @@ function updateFilterDependencies() {
   setSelectOptions(elements.filterProduto, listProductsBySetor(setor), produto);
   setSelectOptions(elements.filterMarca, listBrands(setor, produto), elements.filterMarca.value);
 }
+
+/*
+  ===== Eventos e bootstrap =====
+  Conecta o DOM com as funcoes acima e inicializa a aplicacao no final do arquivo.
+*/
 
 function setupEvents() {
   if (elements.menuView) {
@@ -5645,6 +5812,7 @@ function setupEvents() {
   }
 }
 
+// Sincroniza estado de login da interface com a sessao atual do Supabase.
 async function handleAuthState(event, session) {
   state.user = session?.user ?? null;
   if (state.user) {
@@ -5705,6 +5873,7 @@ async function handleAuthState(event, session) {
   }
 }
 
+// Ponto de entrada da autenticacao: observa mudancas de sessao e carrega a sessao atual.
 function setupAuth() {
   supabaseClient.auth.onAuthStateChange((event, session) => {
     handleAuthState(event, session);
@@ -5714,6 +5883,7 @@ function setupAuth() {
   });
 }
 
+// Inicializa os selects base de setor usados no contexto e no modal de edicao.
 function initSetorSelects() {
   const setores = Object.keys(CONFIG_GERAL);
   if (elements.setorSelect) {
@@ -5738,9 +5908,7 @@ function initSetorSelects() {
     elements.editSetor.value = state.setor;
   }
 }
-
-
-
+// Bootstrap final: monta selects, listeners, autenticacao e carrega os dados iniciais.
 initSetorSelects();
 initManualForm();
 buildFilterOptions();

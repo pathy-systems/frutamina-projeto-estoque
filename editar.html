@@ -20,11 +20,13 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
     />
-    <link rel="stylesheet" href="styles.css?v=20260323-1" />
+    <link rel="stylesheet" href="styles.css?v=20260325-1" />
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
   <body data-page="edit">
+    <!-- Pagina operacional de contagem: login, voz, formulario manual e sincronizacao. -->
     <div class="app">
+      <!-- Cabecalho visual da area de edicao. -->
       <header class="hero">
         <div>
           <img src="assets/img/logo.webp" alt="logo" class="logo" />
@@ -33,6 +35,7 @@
         </div>
       </header>
 
+      <!-- Navegacao principal entre as tres paginas. -->
       <nav class="menu">
         <button id="menu-view" class="ghost" data-href="index.html">Estoque</button>
         <button id="menu-dashboard" class="ghost" data-href="visao-geral.html">
@@ -46,6 +49,7 @@
         <button id="menu-logout" class="ghost hidden">Sair</button>
       </nav>
 
+      <!-- Login do operador antes de liberar a area de contagem. -->
       <section id="auth-panel" class="card">
         <div class="card-header">
           <h2>Acesso</h2>
@@ -63,7 +67,9 @@
         <div id="auth-msg" class="msg-area"></div>
       </section>
 
+      <!-- Painel principal da contagem depois do login. -->
       <section id="count-panel" class="hidden">
+        <!-- Banner de status online/offline e estado do rascunho local. -->
         <section id="count-sync-banner" class="sync-banner hidden">
           <div id="count-sync-pill" class="sync-pill online">Online</div>
           <div class="sync-copy">
@@ -73,6 +79,7 @@
             </span>
           </div>
         </section>
+        <!-- Troca entre estoque atual e nova contagem offline. -->
         <section class="count-mode-bar">
           <div class="count-mode-row">
             <div class="actions count-mode-toggle">
@@ -93,6 +100,7 @@
           </div>
         </section>
         <div class="grid">
+          <!-- Card de voz com feedback do que foi reconhecido pelo microfone. -->
           <section class="card voice-card" id="voice-card">
             <div class="voice-visual" aria-hidden="true">
               <span></span>
@@ -110,6 +118,7 @@
             ></textarea>
           </section>
 
+          <!-- Lancamento manual por tabela (setor, produto, marca, tipo e quantidade). -->
           <section class="card full">
             <div class="card-header">
               <h2>Comando Manual</h2>
@@ -166,6 +175,7 @@
             <div id="messages" class="msg-area"></div>
           </section>
 
+          <!-- Tabela dos itens contados no setor atual, com edicao e remocao. -->
           <section class="card full">
             <div class="card-header">
               <h2>Itens Contados</h2>
@@ -240,6 +250,7 @@
       </section>
     </div>
 
+    <!-- Menu mobile de exportacao da contagem. -->
     <div id="count-export-sheet" class="share-sheet hidden">
       <div class="share-backdrop" data-close="count"></div>
       <div class="share-panel">
@@ -265,6 +276,7 @@
       </div>
     </div>
 
+    <!-- Modal de manutencao manual dos itens ja lancados. -->
     <div id="edit-modal" class="modal hidden">
       <div class="modal-backdrop" id="edit-close"></div>
       <div class="modal-card">
@@ -318,7 +330,7 @@
       </div>
     </div>
 
-    <script src="assets/app.js?v=20260325-1"></script>
+    <script src="assets/app.js?v=20260325-3"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {

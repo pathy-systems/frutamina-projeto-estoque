@@ -1,5 +1,14 @@
-const STATIC_CACHE = "frutamina-static-v10";
-const RUNTIME_CACHE = "frutamina-runtime-v10";
+/*
+  Service worker do PWA.
+
+  Objetivo:
+  - manter o shell do app disponivel offline;
+  - servir paginas/estilos/scripts do cache quando a rede cair;
+  - atualizar o cache automaticamente quando a versao muda.
+*/
+
+const STATIC_CACHE = "frutamina-static-v12";
+const RUNTIME_CACHE = "frutamina-runtime-v12";
 
 const APP_SHELL = [
   "./",
@@ -7,8 +16,8 @@ const APP_SHELL = [
   "./editar.html",
   "./visao-geral.html",
   "./manifest.webmanifest",
-  "./styles.css?v=20260323-1",
-  "./assets/app.js?v=20260325-1",
+  "./styles.css?v=20260325-1",
+  "./assets/app.js?v=20260325-3",
   "./assets/img/logo.webp",
   "./assets/img/capa.png",
   "./assets/img/icon-192.png",
@@ -19,6 +28,7 @@ const APP_SHELL = [
   "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=Source+Sans+3:wght@400;600&display=swap"
 ];
 
+// Chamadas do Supabase devem priorizar rede; cache serve apenas como fallback.
 function isSupabaseApiRequest(url) {
   return url.origin.includes("supabase.co");
 }

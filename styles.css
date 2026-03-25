@@ -1,3 +1,15 @@
+/*
+  Folha de estilos global do projeto.
+
+  Organizacao geral:
+  - layout base (hero, grid, cards, menu);
+  - tabelas e modais;
+  - voz / sincronizacao offline;
+  - dashboard;
+  - impressao;
+  - ajustes responsivos.
+*/
+
 * {
   box-sizing: border-box;
 }
