@@ -820,6 +820,26 @@ const NO_TIPO_PRODUCTS = new Set(["PIMENTAO"]);
 const NO_TIPO_VALUE = 0;
 const TIPO_MIN = 3;
 const TIPO_MAX = 15;
+const SPECIAL_TIPO_VARIANTS = {
+  ORANGE: [
+    {
+      value: 14,
+      label: "6A",
+      matchSequences: [
+        ["6", "A"],
+        ["SEIS", "A"],
+      ],
+    },
+    {
+      value: 15,
+      label: "6B",
+      matchSequences: [
+        ["6", "B"],
+        ["SEIS", "B"],
+      ],
+    },
+  ],
+};
 
 function isNoTipoProduct(produto) {
   if (!produto) return false;
@@ -839,11 +859,61 @@ function formatTipoLabelValue(produto, tipo, marca = "") {
   if (isNoTipoContext(produto, marca)) {
     return "S/T";
   }
-  return tipo;
+  return getSpecialTipoLabel(produto, tipo) || tipo;
 }
 
 function isTipoValid(tipo) {
   return Number.isFinite(tipo) && tipo >= TIPO_MIN && tipo <= TIPO_MAX;
+}
+
+function getSpecialTipoVariants(produto) {
+  if (!produto) return [];
+  return SPECIAL_TIPO_VARIANTS[normalizeText(produto)] || [];
+}
+
+function getSpecialTipoLabel(produto, tipo) {
+  const numericTipo = Number.parseInt(tipo, 10);
+  if (!Number.isFinite(numericTipo)) return null;
+  return (
+    getSpecialTipoVariants(produto).find((variant) => variant.value === numericTipo)
+      ?.label || null
+  );
+}
+
+function hasSpecialTipoVariants(produto) {
+  return getSpecialTipoVariants(produto).length > 0;
+}
+
+function isTipoValidForContext(produto, tipo) {
+  const numericTipo = Number.parseInt(tipo, 10);
+  if (!Number.isFinite(numericTipo)) return false;
+  const specialVariants = getSpecialTipoVariants(produto);
+  if (specialVariants.length) {
+    return specialVariants.some((variant) => variant.value === numericTipo);
+  }
+  return isTipoValid(numericTipo);
+}
+
+function getTipoValidationMessage(produto) {
+  if (hasSpecialTipoVariants(produto)) {
+    return "Para ORANGE, use 6A ou 6B.";
+  }
+  return "Tipo deve estar entre 3 e 15.";
+}
+
+function parseTipoInputValue(value, produto) {
+  const normalizedValue = normalizeText(value);
+  if (!normalizedValue) return null;
+
+  const specialMatch = getSpecialTipoVariants(produto).find((variant) =>
+    variant.matchSequences.some((sequence) => sequence.join(" ") === normalizedValue)
+  );
+  if (specialMatch) {
+    return specialMatch.value;
+  }
+
+  const numericTipo = Number.parseInt(normalizedValue, 10);
+  return Number.isFinite(numericTipo) ? numericTipo : null;
 }
 
 function tokenizeText(text) {
@@ -928,10 +998,7 @@ function extractNumbers(text) {
   return results;
 }
 
-function extractCommandNumbers(text, ignoredValues = []) {
-  const tokens = tokenizeText(text);
-  if (!tokens.length) return [];
-
+function buildIgnoredTokenIndexes(tokens, ignoredValues = []) {
   const ignoredIndexes = new Set();
 
   (ignoredValues || []).forEach((value) => {
@@ -955,8 +1022,23 @@ function extractCommandNumbers(text, ignoredValues = []) {
     }
   });
 
+  return ignoredIndexes;
+}
+
+function extractCommandTokens(text, ignoredValues = []) {
+  const tokens = tokenizeText(text);
+  if (!tokens.length) return [];
+
+  const ignoredIndexes = buildIgnoredTokenIndexes(tokens, ignoredValues);
+
+  return tokens.filter((token, index) => !ignoredIndexes.has(index));
+}
+
+function extractCommandNumbers(text, ignoredValues = []) {
+  const tokens = extractCommandTokens(text, ignoredValues);
+  if (!tokens.length) return [];
+
   return tokens.reduce((results, token, index) => {
-    if (ignoredIndexes.has(index)) return results;
     if (/^\d+$/.test(token)) {
       results.push(Number.parseInt(token, 10));
       return results;
@@ -966,6 +1048,33 @@ function extractCommandNumbers(text, ignoredValues = []) {
     }
     return results;
   }, []);
+}
+
+function extractSpecialTipoSequence(text, produto, ignoredValues = []) {
+  const variants = getSpecialTipoVariants(produto);
+  if (!variants.length) return [];
+
+  const tokens = extractCommandTokens(text, ignoredValues);
+  const results = [];
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    let matched = null;
+    for (const variant of variants) {
+      const sequence = variant.matchSequences.find((candidate) =>
+        candidate.every((token, offset) => tokens[index + offset] === token)
+      );
+      if (sequence) {
+        matched = { value: variant.value, length: sequence.length };
+        break;
+      }
+    }
+    if (matched) {
+      results.push(matched.value);
+      index += matched.length - 1;
+    }
+  }
+
+  return results;
 }
 
 function isAddCommand(text) {
@@ -1826,7 +1935,7 @@ function renderSummaryTables(rows, container, options = {}) {
     group.tipos.forEach((tipo) => {
       const row = document.createElement("tr");
       const tipoCell = document.createElement("td");
-      tipoCell.textContent = tipo;
+      tipoCell.textContent = formatTipoLabelValue(group.produto, tipo);
       tipoCell.className = "cell-tipo";
       row.appendChild(tipoCell);
       group.brands.forEach((brand) => {
@@ -2593,8 +2702,9 @@ function matchesPublicFilters(row) {
   }
   const query = normalizeText(state.publicQuery);
   if (query) {
+    const tipoText = formatTipoLabelValue(row.produto, row.tipo, row.marca);
     const haystack = normalizeText(
-      `${row.setor} ${row.produto} ${row.marca} ${row.tipo}`
+      `${row.setor} ${row.produto} ${row.marca} ${row.tipo} ${tipoText}`
     );
     if (!haystack.includes(query)) return false;
   }
@@ -2945,10 +3055,13 @@ function buildAllBrandMap(products) {
   return buildNormalizedMap(allBrands);
 }
 
-function formatTipoCounts(tipoCounts) {
+function formatTipoCounts(tipoCounts, produto, marca = "") {
   return Array.from(tipoCounts.entries())
     .sort((a, b) => a[0] - b[0])
-    .map(([tipo, count]) => (count > 1 ? `${tipo}x${count}` : String(tipo)))
+    .map(([tipo, count]) => {
+      const tipoLabel = formatTipoLabelValue(produto, tipo, marca);
+      return count > 1 ? `${tipoLabel}x${count}` : String(tipoLabel);
+    })
     .join(", ");
 }
 
@@ -3107,6 +3220,7 @@ async function handlePendingCorrection(rawText) {
   if (!correction?.items?.length) return false;
 
   const item = correction.items[0];
+  const ignoredValues = [item.setor, item.produto, item.marca];
   const numericValues = extractCommandNumbers(rawText, [
     item.setor,
     item.produto,
@@ -3114,6 +3228,11 @@ async function handlePendingCorrection(rawText) {
   ])
     .map((value) => Number.parseInt(value, 10))
     .filter((value) => Number.isFinite(value) && value > 0);
+  const specialTipos = extractSpecialTipoSequence(
+    rawText,
+    item.produto,
+    ignoredValues
+  );
   const setor = item.setor;
   const produto = item.produto;
   const marca = item.marca;
@@ -3129,12 +3248,20 @@ async function handlePendingCorrection(rawText) {
   let nextParams = null;
 
   if (correction.correctionMode === "type") {
-    const tipoCorrigido = numericValues.find((value) => isTipoValid(value));
+    const tipoCorrigido =
+      specialTipos[0] ??
+      numericValues.find((value) => isTipoValidForContext(produto, value));
     if (!Number.isFinite(tipoCorrigido)) {
-      pushMessage("warn", "Diga o tipo correto para corrigir o ultimo lancamento.");
+      pushMessage(
+        "warn",
+        hasSpecialTipoVariants(produto)
+          ? "Diga o tipo correto para corrigir o ultimo lancamento (ex: 6A ou 6B)."
+          : "Diga o tipo correto para corrigir o ultimo lancamento."
+      );
       return true;
     }
 
+    const tipoLabel = formatTipoLabelValue(produto, tipoCorrigido, marca);
     nextParams = {
       setor,
       produto,
@@ -3144,7 +3271,7 @@ async function handlePendingCorrection(rawText) {
       palletsDelta: item.palletsDelta || 1,
       caixasAvulsasDelta: item.caixasAvulsasDelta || 0,
       successPrefix: "Corrigido",
-      successSubject: `${produto} ${marca} Tipo ${tipoCorrigido}`,
+      successSubject: `${produto} ${marca} Tipo ${tipoLabel}`,
       actionKind:
         item.caixasAvulsasDelta > 0
           ? "boxes"
@@ -3169,6 +3296,7 @@ async function handlePendingCorrection(rawText) {
 
     const quantidade = numericValues[numericValues.length - 1];
     if (correction.actionKind === "boxes") {
+      const tipoLabel = formatTipoLabelValue(produto, item.tipo, marca);
       nextParams = {
         setor,
         produto,
@@ -3180,11 +3308,12 @@ async function handlePendingCorrection(rawText) {
         successPrefix: "Corrigido",
         successSubject: noTipo
           ? `${produto} ${marca}`
-          : `${produto} ${marca} Tipo ${item.tipo}`,
+          : `${produto} ${marca} Tipo ${tipoLabel}`,
         actionKind: "boxes",
         correctionMode: "quantity",
       };
     } else {
+      const tipoLabel = formatTipoLabelValue(produto, item.tipo, marca);
       nextParams = {
         setor,
         produto,
@@ -3196,7 +3325,7 @@ async function handlePendingCorrection(rawText) {
         successPrefix: "Corrigido",
         successSubject: noTipo
           ? `${produto} ${marca}`
-          : `${produto} ${marca} Tipo ${item.tipo}`,
+          : `${produto} ${marca} Tipo ${tipoLabel}`,
         actionKind: "pallets",
         correctionMode: quantidade > 1 || noTipo ? "quantity" : "type",
       };
@@ -3305,16 +3434,22 @@ async function processCommand(rawText) {
     }
   }
 
-  const numericValues = extractCommandNumbers(rawText, [
+  const ignoredValues = [
     sectorFound,
     productFound,
     brandFound,
     state.setor,
     state.produto,
     state.marca,
-  ])
+  ];
+  const numericValues = extractCommandNumbers(rawText, ignoredValues)
     .map((value) => Number.parseInt(value, 10))
     .filter((value) => Number.isFinite(value) && value > 0);
+  const specialTipos = extractSpecialTipoSequence(
+    rawText,
+    state.produto,
+    ignoredValues
+  );
   const noTipo = isNoTipoContext(state.produto, state.marca);
   const addCommand = isAddCommand(rawText);
   const boxCommand = hasBoxKeyword(rawText);
@@ -3347,9 +3482,12 @@ async function processCommand(rawText) {
 
     let tipoParaAdicionar = noTipo ? NO_TIPO_VALUE : state.tipo;
 
-    if (!noTipo && numericValues.length >= 2) {
+    if (!noTipo && specialTipos.length) {
+      tipoParaAdicionar = specialTipos[specialTipos.length - 1];
+      state.tipo = tipoParaAdicionar;
+    } else if (!noTipo && numericValues.length >= 2) {
       const candidateTipo = numericValues[0];
-      if (isTipoValid(candidateTipo)) {
+      if (isTipoValidForContext(state.produto, candidateTipo)) {
         tipoParaAdicionar = candidateTipo;
         state.tipo = candidateTipo;
       }
@@ -3358,19 +3496,26 @@ async function processCommand(rawText) {
     if (!noTipo && !Number.isFinite(tipoParaAdicionar)) {
       pushMessage(
         "warn",
-        "Diga o tipo primeiro (ex: REI 4) para somar caixas avulsas."
+        hasSpecialTipoVariants(state.produto)
+          ? "Diga o tipo primeiro (ex: 6A ou 6B) para somar caixas avulsas."
+          : "Diga o tipo primeiro (ex: REI 4) para somar caixas avulsas."
       );
       renderContext();
       return;
     }
-    if (!noTipo && !isTipoValid(tipoParaAdicionar)) {
-      pushMessage("warn", "Tipo deve estar entre 3 e 15.");
+    if (!noTipo && !isTipoValidForContext(state.produto, tipoParaAdicionar)) {
+      pushMessage("warn", getTipoValidationMessage(state.produto));
       renderContext();
       return;
     }
 
     const caixasAvulsasDelta = numericValues[numericValues.length - 1];
     const caixasPallet = regra(tipoParaAdicionar);
+    const tipoLabel = formatTipoLabelValue(
+      state.produto,
+      tipoParaAdicionar,
+      state.marca
+    );
 
     await registerInventoryChange({
       setor: state.setor,
@@ -3382,7 +3527,7 @@ async function processCommand(rawText) {
       successPrefix: "Registrado",
       successSubject: noTipo
         ? `${state.produto} ${state.marca}`
-        : `${state.produto} ${state.marca} Tipo ${tipoParaAdicionar}`,
+        : `${state.produto} ${state.marca} Tipo ${tipoLabel}`,
       actionKind: "boxes",
       correctionMode: "quantity",
     });
@@ -3420,9 +3565,12 @@ async function processCommand(rawText) {
     const quantity = numericValues[numericValues.length - 1];
     let tipoParaAdicionar = noTipo ? NO_TIPO_VALUE : state.tipo;
 
-    if (!noTipo && numericValues.length >= 2) {
+    if (!noTipo && specialTipos.length) {
+      tipoParaAdicionar = specialTipos[specialTipos.length - 1];
+      state.tipo = tipoParaAdicionar;
+    } else if (!noTipo && numericValues.length >= 2) {
       const candidateTipo = numericValues[0];
-      if (isTipoValid(candidateTipo)) {
+      if (isTipoValidForContext(state.produto, candidateTipo)) {
         tipoParaAdicionar = candidateTipo;
         state.tipo = candidateTipo;
       }
@@ -3431,19 +3579,26 @@ async function processCommand(rawText) {
     if (!noTipo && !Number.isFinite(tipoParaAdicionar)) {
       pushMessage(
         "warn",
-        "Diga o tipo primeiro (ex: REI 4) para usar 'adicionar'."
+        hasSpecialTipoVariants(state.produto)
+          ? "Diga o tipo primeiro (ex: 6A ou 6B) para usar 'adicionar'."
+          : "Diga o tipo primeiro (ex: REI 4) para usar 'adicionar'."
       );
       renderContext();
       return;
     }
-    if (!noTipo && !isTipoValid(tipoParaAdicionar)) {
-      pushMessage("warn", "Tipo deve estar entre 3 e 15.");
+    if (!noTipo && !isTipoValidForContext(state.produto, tipoParaAdicionar)) {
+      pushMessage("warn", getTipoValidationMessage(state.produto));
       renderContext();
       return;
     }
 
     const caixasPallet = regra(tipoParaAdicionar);
     const palletsDelta = quantity;
+    const tipoLabel = formatTipoLabelValue(
+      state.produto,
+      tipoParaAdicionar,
+      state.marca
+    );
 
     await registerInventoryChange({
       setor: state.setor,
@@ -3455,7 +3610,7 @@ async function processCommand(rawText) {
       successPrefix: "Adicionado",
       successSubject: noTipo
         ? `${state.produto} ${state.marca}`
-        : `${state.produto} ${state.marca} Tipo ${tipoParaAdicionar}`,
+        : `${state.produto} ${state.marca} Tipo ${tipoLabel}`,
       actionKind: "pallets",
       correctionMode: "quantity",
     });
@@ -3543,10 +3698,12 @@ async function processCommand(rawText) {
       return;
     }
 
-    const tiposValid = numericValues.filter((value) => isTipoValid(value));
+    const tiposValid = hasSpecialTipoVariants(state.produto)
+      ? specialTipos
+      : numericValues.filter((value) => isTipoValid(value));
 
     if (!tiposValid.length) {
-      pushMessage("warn", "Tipo deve estar entre 3 e 15.");
+      pushMessage("warn", getTipoValidationMessage(state.produto));
       renderContext();
       return;
     }
@@ -3569,7 +3726,11 @@ async function processCommand(rawText) {
       }
     }
 
-    const tipoLabel = formatTipoCounts(tipoCounts);
+    const tipoLabel = formatTipoCounts(
+      tipoCounts,
+      state.produto,
+      state.marca
+    );
     const launchItems = Array.from(tipoCounts.entries()).map(([tipo, count]) => ({
       setor: state.setor,
       produto: state.produto,
@@ -3792,11 +3953,16 @@ function exportRows(rows, filename) {
     ...rows.map((row) =>
       {
         const normalizedRow = hydrateInventoryRow(row);
+        const tipoLabel = formatTipoLabelValue(
+          normalizedRow.produto,
+          normalizedRow.tipo,
+          normalizedRow.marca
+        );
         return [
           normalizedRow.setor,
           normalizedRow.produto,
           normalizedRow.marca,
-          normalizedRow.tipo,
+          tipoLabel,
           normalizedRow.caixas_pallet,
           normalizedRow.pallets,
           normalizedRow.caixas_avulsas,
@@ -4151,7 +4317,10 @@ function openEditModal(row = null) {
     elements.editMarca.value = row?.marca || "";
   }
   if (elements.editTipo) {
-    elements.editTipo.value = row?.tipo ?? "";
+    elements.editTipo.value =
+      row?.tipo === 0 || row?.tipo
+        ? formatTipoLabelValue(row?.produto, row?.tipo, row?.marca)
+        : "";
   }
   if (elements.editCaixas) {
     elements.editCaixas.value = row?.caixas_pallet ?? "";
@@ -4208,7 +4377,7 @@ async function saveEditItem() {
     let setor = normalizeSetorValue(elements.editSetor.value);
     const produto = cleanLabel(elements.editProduto.value);
     const marca = cleanLabel(elements.editMarca.value);
-    const tipo = Number.parseInt(elements.editTipo.value, 10);
+    const tipo = parseTipoInputValue(elements.editTipo.value, produto);
     const caixasPallet = Number.parseInt(elements.editCaixas.value, 10);
     const pallets = Number.parseInt(elements.editPallets.value, 10);
     const caixasAvulsas = toNonNegativeInt(elements.editLooseBoxes?.value, 0);
@@ -4260,11 +4429,11 @@ async function saveEditItem() {
     if (
       Number.isNaN(caixasPallet) ||
       Number.isNaN(pallets) ||
-      (!noTipo && Number.isNaN(tipo))
+      (!noTipo && !Number.isFinite(tipo))
     ) {
       setEditMessage(
         "error",
-        "Preencha tipo, caixas/pallet e pallets com numeros validos."
+        "Preencha tipo, caixas/pallet e pallets com valores validos."
       );
       return;
     }
@@ -4276,8 +4445,8 @@ async function saveEditItem() {
       setEditMessage("error", "Informe pallets ou caixas avulsas.");
       return;
     }
-    if (!noTipo && !isTipoValid(tipo)) {
-      setEditMessage("error", "Tipo deve estar entre 3 e 15.");
+    if (!noTipo && !isTipoValidForContext(produto, tipo)) {
+      setEditMessage("error", getTipoValidationMessage(produto));
       return;
     }
 
@@ -4417,8 +4586,11 @@ async function saveEditItem() {
 async function removeRow(row) {
   const rowKey = getRowKey(row);
   if (!rowKey) return;
+  const tipoLabel = formatTipoLabelValue(row?.produto, row?.tipo, row?.marca);
   const confirmDelete = window.confirm(
-    `Remover o item ${row.produto} ${row.marca} Tipo ${row.tipo}?`
+    isNoTipoContext(row?.produto, row?.marca)
+      ? `Remover o item ${row.produto} ${row.marca}?`
+      : `Remover o item ${row.produto} ${row.marca} Tipo ${tipoLabel}?`
   );
   if (!confirmDelete) return;
 
@@ -4734,6 +4906,7 @@ function updateManualTipoOptions() {
   if (!elements.manualTipo || !elements.manualProduto || !elements.manualMarca) return;
   const produto = elements.manualProduto.value;
   const marca = elements.manualMarca.value;
+  const currentTipoValue = elements.manualTipo.value;
   if (isNoTipoContext(produto, marca)) {
     elements.manualTipo.innerHTML = "";
     const option = document.createElement("option");
@@ -4745,11 +4918,34 @@ function updateManualTipoOptions() {
     return;
   }
   elements.manualTipo.disabled = false;
+  if (hasSpecialTipoVariants(produto)) {
+    elements.manualTipo.innerHTML = "";
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = "Selecione";
+    elements.manualTipo.appendChild(empty);
+    getSpecialTipoVariants(produto).forEach((variant) => {
+      const option = document.createElement("option");
+      option.value = String(variant.value);
+      option.textContent = variant.label;
+      elements.manualTipo.appendChild(option);
+    });
+    if (
+      currentTipoValue &&
+      elements.manualTipo.querySelector(`option[value="${currentTipoValue}"]`)
+    ) {
+      elements.manualTipo.value = currentTipoValue;
+    } else {
+      elements.manualTipo.value = "";
+    }
+    updateManualBoxesOptions();
+    return;
+  }
   setNumberOptions(
     elements.manualTipo,
     TIPO_MIN,
     TIPO_MAX,
-    elements.manualTipo.value,
+    currentTipoValue,
     "Selecione"
   );
   updateManualBoxesOptions();
@@ -4765,8 +4961,8 @@ function getManualCaixasPallet() {
   const noTipo = isNoTipoContext(produto, marca);
   const tipo = noTipo
     ? NO_TIPO_VALUE
-    : Number.parseInt(elements.manualTipo?.value, 10);
-  if (!noTipo && !isTipoValid(tipo)) return 0;
+    : parseTipoInputValue(elements.manualTipo?.value, produto);
+  if (!noTipo && !isTipoValidForContext(produto, tipo)) return 0;
   return toNonNegativeInt(regra(tipo), 0);
 }
 
@@ -4885,7 +5081,7 @@ async function addManualItem() {
   const setor = elements.manualSetor.value;
   const produto = elements.manualProduto.value;
   const marca = elements.manualMarca.value;
-  const tipoInput = Number.parseInt(elements.manualTipo.value, 10);
+  const tipoInput = parseTipoInputValue(elements.manualTipo.value, produto);
   const pallets = toNonNegativeInt(elements.manualPallets?.value, 0);
   const caixasAvulsas = toNonNegativeInt(elements.manualBoxes?.value, 0);
   const noTipo = isNoTipoContext(produto, marca);
@@ -4895,12 +5091,12 @@ async function addManualItem() {
     return;
   }
 
-  if (!noTipo && Number.isNaN(tipoInput)) {
+  if (!noTipo && !Number.isFinite(tipoInput)) {
     pushMessage("warn", "Informe o tipo.");
     return;
   }
-  if (!noTipo && !isTipoValid(tipoInput)) {
-    pushMessage("warn", "Tipo deve estar entre 3 e 15.");
+  if (!noTipo && !isTipoValidForContext(produto, tipoInput)) {
+    pushMessage("warn", getTipoValidationMessage(produto));
     return;
   }
 
@@ -4918,6 +5114,7 @@ async function addManualItem() {
   const tipo = noTipo ? NO_TIPO_VALUE : tipoInput;
   const caixasPallet = regra(tipo);
   const palletsDelta = pallets;
+  const tipoLabel = formatTipoLabelValue(produto, tipo, marca);
 
   state.setor = setor;
   state.produto = produto;
@@ -4938,7 +5135,7 @@ async function addManualItem() {
     successPrefix: "Registrado",
     successSubject: noTipo
       ? `${produto} ${marca}`
-      : `${produto} ${marca} Tipo ${tipo}`,
+      : `${produto} ${marca} Tipo ${tipoLabel}`,
     actionKind: caixasAvulsas > 0 ? "boxes" : "pallets",
     correctionMode:
       caixasAvulsas > 0 || pallets > 1 || noTipo ? "quantity" : "type",
