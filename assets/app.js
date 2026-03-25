@@ -276,6 +276,7 @@ function normalizeInventoryMetrics({
 
 function hydrateInventoryRow(row, overrides = {}) {
   const base = { ...(row || {}), ...(overrides || {}) };
+  const normalizedTipo = normalizeStoredTipoValue(base.produto, base.tipo);
   const metrics = normalizeInventoryMetrics({
     caixasPallet: base.caixas_pallet,
     pallets: base.pallets,
@@ -284,6 +285,7 @@ function hydrateInventoryRow(row, overrides = {}) {
   });
   return {
     ...base,
+    tipo: normalizedTipo,
     ...metrics,
   };
 }
@@ -860,7 +862,8 @@ const TIPO_MAX = 15;
 const SPECIAL_TIPO_VARIANTS = {
   ORANGE: [
     {
-      value: 601,
+      value: 14,
+      legacyValues: [601],
       baseValue: 6,
       sortOrder: 61,
       label: "6A",
@@ -870,7 +873,8 @@ const SPECIAL_TIPO_VARIANTS = {
       ],
     },
     {
-      value: 602,
+      value: 15,
+      legacyValues: [602],
       baseValue: 6,
       sortOrder: 62,
       label: "6B",
@@ -916,9 +920,22 @@ function getSpecialTipoVariantByValue(produto, tipo) {
   const numericTipo = Number.parseInt(tipo, 10);
   if (!Number.isFinite(numericTipo)) return null;
   return (
-    getSpecialTipoVariants(produto).find((variant) => variant.value === numericTipo) ||
+    getSpecialTipoVariants(produto).find(
+      (variant) =>
+        variant.value === numericTipo ||
+        (variant.legacyValues || []).includes(numericTipo)
+    ) ||
     null
   );
+}
+
+function normalizeStoredTipoValue(produto, tipo) {
+  const specialVariant = getSpecialTipoVariantByValue(produto, tipo);
+  if (specialVariant) {
+    return specialVariant.value;
+  }
+  const numericTipo = Number.parseInt(tipo, 10);
+  return Number.isFinite(numericTipo) ? numericTipo : tipo;
 }
 
 function isSpecialTipoVariantValue(produto, tipo) {
@@ -960,6 +977,9 @@ function getTipoExampleHint(produto) {
 
 function buildTipoOptionList(produto) {
   const options = [];
+  const reservedValues = new Set(
+    getSpecialTipoVariants(produto).map((variant) => Number.parseInt(variant.value, 10))
+  );
   for (let tipo = TIPO_MIN; tipo <= TIPO_MAX; tipo += 1) {
     const variants = getSpecialTipoVariants(produto).filter(
       (variant) => variant.baseValue === tipo
@@ -968,6 +988,9 @@ function buildTipoOptionList(produto) {
       variants.forEach((variant) => {
         options.push({ value: String(variant.value), label: variant.label });
       });
+      continue;
+    }
+    if (reservedValues.has(tipo)) {
       continue;
     }
     options.push({ value: String(tipo), label: String(tipo) });
