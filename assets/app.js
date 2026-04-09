@@ -40,11 +40,12 @@ const CONFIG_GERAL = {
       LOLA: (t) => 66,
       BAHIA: (t) => 66,
       COSA: (t) => 66,
-  
+
     },
     "MELANCIA (CHAO)": {
       SAMBA: (t) => (t >= 4 && t <= 7 ? 66 : 65),
       MOSSORO: (t) => 60,
+
       BRAZIL: (t) => 60,
     },
   },
@@ -55,6 +56,7 @@ const CONFIG_GERAL = {
     },
     ORANGE: {
       BAHIA: (t) => 130,
+      MOSSORO: (t) => 130,
     },
     DINO: {
       SAMBA: (t) => 84,
@@ -1328,8 +1330,8 @@ function getCurrentPublicAggregateRows() {
 function hasCountDraftData() {
   return Boolean(
     state.sessionRows.length ||
-      state.previousCountRows.length ||
-      state.previousPublicRows.length
+    state.previousCountRows.length ||
+    state.previousPublicRows.length
   );
 }
 
@@ -1997,15 +1999,15 @@ function renderComparisonReport() {
       <td>${item.marca}</td>
       <td>${tipoLabel}</td>
       <td>${formatInventorySnapshot(
-        item.previous_pallets,
-        item.previous_caixas_avulsas,
-        item.previous_total_caixas
-      )}</td>
+      item.previous_pallets,
+      item.previous_caixas_avulsas,
+      item.previous_total_caixas
+    )}</td>
       <td>${formatInventorySnapshot(
-        item.current_pallets,
-        item.current_caixas_avulsas,
-        item.current_total_caixas
-      )}</td>
+      item.current_pallets,
+      item.current_caixas_avulsas,
+      item.current_total_caixas
+    )}</td>
       <td class="comparison-loss">${formatNumber(item.saida_caixas)}</td>
     `;
     tbody.appendChild(tr);
@@ -2687,10 +2689,10 @@ function buildDashboardSeries(range) {
   const outflow = useSnapshots
     ? buildSnapshotEventSeries(sourceRows, range, "outflow_caixas")
     : {
-        dates: total.dates,
-        values: buildOutflowSeries(total.values),
-        range: total.range,
-      };
+      dates: total.dates,
+      values: buildOutflowSeries(total.values),
+      range: total.range,
+    };
   return { range: total.range, total, outflow, source: useSnapshots ? "snapshot" : "live" };
 }
 
@@ -3242,8 +3244,8 @@ async function upsertRecord({
       updated,
       false,
       Object.prototype.hasOwnProperty.call(existing || {}, "caixas_avulsas") ||
-        updated.caixas_avulsas > 0 ||
-        toNonNegativeInt(caixasAvulsasDelta, 0) > 0
+      updated.caixas_avulsas > 0 ||
+      toNonNegativeInt(caixasAvulsasDelta, 0) > 0
     );
     const { error } = await supabaseClient
       .from(TABLE_NAME)
@@ -4224,25 +4226,24 @@ function exportRows(rows, filename) {
   ];
   const csv = [
     header.join(";"),
-    ...rows.map((row) =>
-      {
-        const normalizedRow = hydrateInventoryRow(row);
-        const tipoLabel = formatTipoLabelValue(
-          normalizedRow.produto,
-          normalizedRow.tipo,
-          normalizedRow.marca
-        );
-        return [
-          normalizedRow.setor,
-          normalizedRow.produto,
-          normalizedRow.marca,
-          tipoLabel,
-          normalizedRow.caixas_pallet,
-          normalizedRow.pallets,
-          normalizedRow.caixas_avulsas,
-          normalizedRow.total_caixas,
-        ].join(";");
-      }
+    ...rows.map((row) => {
+      const normalizedRow = hydrateInventoryRow(row);
+      const tipoLabel = formatTipoLabelValue(
+        normalizedRow.produto,
+        normalizedRow.tipo,
+        normalizedRow.marca
+      );
+      return [
+        normalizedRow.setor,
+        normalizedRow.produto,
+        normalizedRow.marca,
+        tipoLabel,
+        normalizedRow.caixas_pallet,
+        normalizedRow.pallets,
+        normalizedRow.caixas_avulsas,
+        normalizedRow.total_caixas,
+      ].join(";");
+    }
     ),
   ].join("\n");
 
