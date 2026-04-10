@@ -58,6 +58,9 @@ const CONFIG_GERAL = {
       BAHIA: (t) => 130,
       MOSSORO: (t) => 130,
     },
+    "ORANGE REDE": {
+      MOSSORO: (t) => 77,
+    },
     DINO: {
       SAMBA: (t) => 84,
       BRAZIL: (t) => 84,
