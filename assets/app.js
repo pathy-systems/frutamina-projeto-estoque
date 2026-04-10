@@ -54,9 +54,6 @@ const CONFIG_GERAL = {
       SAMBA: (t) => 65,
       BRAZIL: (t) => 65,
     },
-    "ORANGE REDE": {
-      MOSSORO: (t) => 77,
-    },
     ORANGE: {
       BAHIA: (t) => 130,
       MOSSORO: (t) => 130,
