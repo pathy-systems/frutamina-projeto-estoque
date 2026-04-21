@@ -84,6 +84,7 @@ const CONFIG_GERAL = {
       "MAGALI 14Kg": (t) => 66,
       CEPI: (t) => (t >= 5 && t <= 6 ? 77 : 84),
       "CEPI 14Kg": (t) => 66,
+      "CEPI BRANCA": (t) => 54,
     },
     MATISSE: {
       "MATISSE REI": (t) => (t >= 5 && t <= 6 ? 77 : 84),
