@@ -8,6 +8,8 @@ const PUBLIC_CACHE_KEY = "cd_public_cache";
 const PUBLIC_CACHE_AT_KEY = "cd_public_cache_at";
 const COUNT_DRAFT_KEY_PREFIX = "cd_count_draft_v1";
 const LAST_COMPARISON_KEY = "cd_last_comparison_v1";
+const CATALOG_ADDITIONS_KEY = "cd_catalog_additions_v1";
+const CATALOG_REMOVALS_KEY = "cd_catalog_removals_v1";
 
 /*
   Arquivo central do sistema.
@@ -108,6 +110,19 @@ const CONFIG_GERAL = {
   },
 };
 
+function cloneConfigTree(sourceConfig = {}) {
+  const cloned = {};
+  Object.entries(sourceConfig || {}).forEach(([setor, produtos]) => {
+    cloned[setor] = {};
+    Object.entries(produtos || {}).forEach(([produto, marcas]) => {
+      cloned[setor][produto] = { ...(marcas || {}) };
+    });
+  });
+  return cloned;
+}
+
+const BASE_CONFIG_GERAL = cloneConfigTree(CONFIG_GERAL);
+
 const NUMBER_WORDS = {
   ZERO: 0,
   UM: 1,
@@ -167,6 +182,7 @@ const state = {
   marca: null,
   tipo: null,
   countMode: "current",
+  editSection: "stock",
   sessionRows: [],
   userRows: [],
   previousCountRows: [],
@@ -205,6 +221,8 @@ const state = {
   lastComparisonReport: null,
   countDraftSavedAt: null,
   countDraftHash: "",
+  catalogAdditions: [],
+  catalogRemovals: [],
 };
 
 function toInt(value, fallback = 0) {
@@ -692,9 +710,13 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 
 // Cache dos elementos de DOM usados ao longo do arquivo para evitar buscas repetidas.
 const elements = {
+  sidebar: document.getElementById("app-sidebar"),
+  sidebarOverlay: document.getElementById("sidebar-overlay"),
+  sidebarToggle: document.getElementById("sidebar-toggle"),
   menuView: document.getElementById("menu-view"),
   menuDashboard: document.getElementById("menu-dashboard"),
   menuCount: document.getElementById("menu-count"),
+  menuProducts: document.getElementById("menu-products"),
   menuUser: document.getElementById("menu-user"),
   menuUserEmail: document.getElementById("menu-user-email"),
   menuLogout: document.getElementById("menu-logout"),
@@ -729,7 +751,11 @@ const elements = {
   publicMsg: document.getElementById("public-msg"),
   authPanel: document.getElementById("auth-panel"),
   countPanel: document.getElementById("count-panel"),
+  productsPanel: document.getElementById("products-panel"),
   countSyncBanner: document.getElementById("count-sync-banner"),
+  countModeBar: document.getElementById("count-mode-bar"),
+  sectionStockBtn: document.getElementById("section-stock"),
+  sectionProductsBtn: document.getElementById("section-products"),
   countSyncPill: document.getElementById("count-sync-pill"),
   countSyncTitle: document.getElementById("count-sync-title"),
   countSyncText: document.getElementById("count-sync-text"),
@@ -781,6 +807,7 @@ const elements = {
   voiceLast: document.getElementById("voice-last"),
   commandInput: document.getElementById("command-input"),
   processBtn: document.getElementById("process-btn"),
+  manualCard: document.getElementById("manual-card"),
   manualSetor: document.getElementById("manual-setor"),
   manualProduto: document.getElementById("manual-produto"),
   manualMarca: document.getElementById("manual-marca"),
@@ -792,6 +819,17 @@ const elements = {
   manualLabelTipo: document.getElementById("manual-label-tipo"),
   manualLabelQty: document.getElementById("manual-label-qty"),
   messages: document.getElementById("messages"),
+  catalogSetor: document.getElementById("catalog-setor"),
+  catalogProduto: document.getElementById("catalog-produto"),
+  catalogMarca: document.getElementById("catalog-marca"),
+  catalogCaixas: document.getElementById("catalog-caixas"),
+  catalogNoTipo: document.getElementById("catalog-no-tipo"),
+  catalogAddBtn: document.getElementById("catalog-add-btn"),
+  catalogResetBtn: document.getElementById("catalog-reset-btn"),
+  catalogTableBody: document.getElementById("catalog-table-body"),
+  catalogMsg: document.getElementById("catalog-msg"),
+  catalogCard: document.getElementById("catalog-card"),
+  countItemsCard: document.getElementById("count-items-card"),
   countTableBody: document.getElementById("count-table-body"),
   countTotalGeral: document.getElementById("count-total-geral"),
   countExportToggle: document.getElementById("count-export-toggle"),
@@ -862,7 +900,8 @@ function normalizeText(text) {
   return tokens.map((token) => tokenMap[token] || token).join(" ").trim();
 }
 
-const NO_TIPO_PRODUCTS = new Set(["PIMENTAO"]);
+const BASE_NO_TIPO_PRODUCTS = new Set(["PIMENTAO"]);
+const NO_TIPO_PRODUCTS = new Set(BASE_NO_TIPO_PRODUCTS);
 const NO_TIPO_VALUE = 0;
 const TIPO_MIN = 3;
 const TIPO_MAX = 15;
@@ -1303,6 +1342,435 @@ function loadPublicCache() {
   }
 }
 
+function setCatalogMessage(type, text) {
+  if (!elements.catalogMsg) return;
+  elements.catalogMsg.innerHTML = "";
+  if (!text) return;
+  const msg = document.createElement("div");
+  msg.className = `msg ${type}`;
+  msg.textContent = text;
+  elements.catalogMsg.appendChild(msg);
+}
+
+function readCatalogStorageArray(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn("Nao foi possivel ler configuracao do catalogo local.", error);
+    return [];
+  }
+}
+
+function buildCatalogEntryKey({ setor, produto, marca }) {
+  return `${setor}|||${produto}|||${marca}`;
+}
+
+function parseCatalogEntryKey(key) {
+  const parts = String(key || "").split("|||");
+  if (parts.length !== 3) return null;
+  const [setor, produto, marca] = parts;
+  if (!setor || !produto || !marca) return null;
+  return { setor, produto, marca };
+}
+
+function cleanCatalogLabel(value) {
+  return String(value || "")
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9() /-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeCatalogRemovalEntry(entry) {
+  const setor = normalizeSetorValue(cleanCatalogLabel(entry?.setor || ""));
+  const produto = cleanCatalogLabel(entry?.produto || "");
+  const marca = cleanCatalogLabel(entry?.marca || "");
+  if (!setor || !produto || !marca) return null;
+  return { setor, produto, marca };
+}
+
+function normalizeCatalogAdditionEntry(entry) {
+  const base = normalizeCatalogRemovalEntry(entry);
+  if (!base) return null;
+  const caixasPallet = toNonNegativeInt(entry?.caixasPallet, 0);
+  if (caixasPallet <= 0) return null;
+  return {
+    ...base,
+    caixasPallet,
+    noTipo: Boolean(entry?.noTipo),
+  };
+}
+
+function dedupeCatalogEntries(entries, normalizer) {
+  const map = new Map();
+  (entries || []).forEach((entry) => {
+    const normalized = normalizer(entry);
+    if (!normalized) return;
+    map.set(buildCatalogEntryKey(normalized), normalized);
+  });
+  return Array.from(map.values());
+}
+
+function buildFixedCaixasRule(caixasPallet) {
+  const fixedValue = toNonNegativeInt(caixasPallet, 0);
+  return () => fixedValue;
+}
+
+function configHasCatalogEntry(config, { setor, produto, marca }) {
+  return typeof config?.[setor]?.[produto]?.[marca] === "function";
+}
+
+function removeCatalogEntryFromConfig(config, { setor, produto, marca }) {
+  if (!config?.[setor]?.[produto]?.[marca]) return;
+  delete config[setor][produto][marca];
+  if (!Object.keys(config[setor][produto]).length) {
+    delete config[setor][produto];
+  }
+}
+
+function replaceConfigFromSource(sourceConfig = {}) {
+  Object.keys(CONFIG_GERAL).forEach((setor) => {
+    delete CONFIG_GERAL[setor];
+  });
+  Object.entries(sourceConfig).forEach(([setor, produtos]) => {
+    CONFIG_GERAL[setor] = {};
+    Object.entries(produtos || {}).forEach(([produto, marcas]) => {
+      CONFIG_GERAL[setor][produto] = { ...(marcas || {}) };
+    });
+  });
+}
+
+function applyCatalogOverridesFromState() {
+  const nextConfig = cloneConfigTree(BASE_CONFIG_GERAL);
+
+  state.catalogRemovals.forEach((entry) => {
+    removeCatalogEntryFromConfig(nextConfig, entry);
+  });
+
+  state.catalogAdditions.forEach((entry) => {
+    if (!nextConfig[entry.setor]) {
+      nextConfig[entry.setor] = {};
+    }
+    if (!nextConfig[entry.setor][entry.produto]) {
+      nextConfig[entry.setor][entry.produto] = {};
+    }
+    nextConfig[entry.setor][entry.produto][entry.marca] = buildFixedCaixasRule(
+      entry.caixasPallet
+    );
+  });
+
+  replaceConfigFromSource(nextConfig);
+
+  NO_TIPO_PRODUCTS.clear();
+  BASE_NO_TIPO_PRODUCTS.forEach((produto) => NO_TIPO_PRODUCTS.add(produto));
+  state.catalogAdditions.forEach((entry) => {
+    if (entry.noTipo) {
+      NO_TIPO_PRODUCTS.add(entry.produto);
+    }
+  });
+}
+
+function persistCatalogOverrides() {
+  try {
+    localStorage.setItem(CATALOG_ADDITIONS_KEY, JSON.stringify(state.catalogAdditions));
+    localStorage.setItem(CATALOG_REMOVALS_KEY, JSON.stringify(state.catalogRemovals));
+  } catch (error) {
+    console.warn("Nao foi possivel salvar configuracao local do catalogo.", error);
+    setCatalogMessage(
+      "warn",
+      "Nao foi possivel salvar o catalogo neste aparelho."
+    );
+  }
+}
+
+function loadCatalogOverridesFromStorage() {
+  const additions = dedupeCatalogEntries(
+    readCatalogStorageArray(CATALOG_ADDITIONS_KEY),
+    normalizeCatalogAdditionEntry
+  );
+  const removals = dedupeCatalogEntries(
+    readCatalogStorageArray(CATALOG_REMOVALS_KEY),
+    normalizeCatalogRemovalEntry
+  );
+  const additionKeys = new Set(additions.map((entry) => buildCatalogEntryKey(entry)));
+  state.catalogAdditions = additions;
+  state.catalogRemovals = removals.filter(
+    (entry) => !additionKeys.has(buildCatalogEntryKey(entry))
+  );
+  applyCatalogOverridesFromState();
+}
+
+function sanitizeContextAfterCatalogChange() {
+  const setores = Object.keys(CONFIG_GERAL);
+  if (!setores.length) {
+    state.setor = "";
+    state.produto = null;
+    state.marca = null;
+    state.tipo = null;
+    return;
+  }
+
+  if (!CONFIG_GERAL[state.setor]) {
+    state.setor = setores[0];
+  }
+
+  if (state.produto && !CONFIG_GERAL[state.setor]?.[state.produto]) {
+    state.produto = null;
+    state.marca = null;
+    state.tipo = null;
+    return;
+  }
+
+  if (state.marca && !CONFIG_GERAL[state.setor]?.[state.produto]?.[state.marca]) {
+    state.marca = null;
+    state.tipo = null;
+  }
+
+  if (state.produto && state.marca && state.tipo !== null && state.tipo !== undefined) {
+    const noTipo = isNoTipoContext(state.produto, state.marca);
+    if (noTipo) {
+      state.tipo = NO_TIPO_VALUE;
+    } else if (!isTipoValidForContext(state.produto, state.tipo)) {
+      state.tipo = null;
+    }
+  }
+}
+
+function describeCatalogCaixas(rule, produto, marca) {
+  if (typeof rule !== "function") return "--";
+  if (isNoTipoContext(produto, marca)) {
+    return String(toNonNegativeInt(rule(NO_TIPO_VALUE), 0));
+  }
+
+  const caixasValues = buildTipoOptionList(produto).map((tipoOption) =>
+    toNonNegativeInt(rule(getTipoRuleValue(produto, tipoOption.value)), 0)
+  );
+  if (!caixasValues.length) {
+    return "--";
+  }
+  const uniqueValues = Array.from(new Set(caixasValues));
+  if (uniqueValues.length === 1) {
+    return String(uniqueValues[0]);
+  }
+  return `${Math.min(...uniqueValues)}-${Math.max(...uniqueValues)}`;
+}
+
+function listCatalogRows() {
+  const rows = [];
+  const additionsKeySet = new Set(
+    state.catalogAdditions.map((entry) => buildCatalogEntryKey(entry))
+  );
+
+  Object.entries(CONFIG_GERAL).forEach(([setor, produtos]) => {
+    Object.entries(produtos || {}).forEach(([produto, marcas]) => {
+      Object.entries(marcas || {}).forEach(([marca, regra]) => {
+        const rowKey = buildCatalogEntryKey({ setor, produto, marca });
+        const baseExists = configHasCatalogEntry(BASE_CONFIG_GERAL, {
+          setor,
+          produto,
+          marca,
+        });
+        const isCustom = additionsKeySet.has(rowKey);
+        rows.push({
+          key: rowKey,
+          setor,
+          produto,
+          marca,
+          caixasPalletLabel: describeCatalogCaixas(regra, produto, marca),
+          tipoLabel: isNoTipoProduct(produto) ? "S/T" : "3 a 15",
+          origemLabel: isCustom ? (baseExists ? "Personalizado" : "Adicionado") : "Padrao",
+        });
+      });
+    });
+  });
+
+  return rows.sort((a, b) => {
+    const bySetor = a.setor.localeCompare(b.setor);
+    if (bySetor !== 0) return bySetor;
+    const byProduto = a.produto.localeCompare(b.produto);
+    if (byProduto !== 0) return byProduto;
+    return a.marca.localeCompare(b.marca);
+  });
+}
+
+function renderCatalogTable() {
+  if (!elements.catalogTableBody) return;
+  const rows = listCatalogRows();
+  if (!rows.length) {
+    elements.catalogTableBody.innerHTML =
+      '<tr><td colspan="7" class="catalog-empty">Nenhum produto cadastrado.</td></tr>';
+    return;
+  }
+
+  elements.catalogTableBody.innerHTML = rows
+    .map(
+      (row) => `
+      <tr>
+        <td>${row.setor}</td>
+        <td>${row.produto}</td>
+        <td>${row.marca}</td>
+        <td>${row.caixasPalletLabel}</td>
+        <td>${row.tipoLabel}</td>
+        <td>${row.origemLabel}</td>
+        <td>
+          <div class="row-actions">
+            <button
+              class="danger catalog-remove-btn"
+              type="button"
+              data-catalog-key="${row.key}"
+            >
+              Remover
+            </button>
+          </div>
+        </td>
+      </tr>
+    `
+    )
+    .join("");
+}
+
+function refreshCatalogDependentUI() {
+  const previousManualSetor = elements.manualSetor?.value || "";
+  const previousCatalogSetor = elements.catalogSetor?.value || "";
+  sanitizeContextAfterCatalogChange();
+  initSetorSelects();
+
+  if (elements.manualSetor) {
+    setSelectOptionsWithPlaceholder(
+      elements.manualSetor,
+      Object.keys(CONFIG_GERAL).sort(),
+      previousManualSetor || state.setor,
+      "Selecione"
+    );
+  }
+
+  if (elements.manualProduto && elements.manualMarca) {
+    updateManualDependencies();
+  }
+
+  if (elements.catalogSetor) {
+    setSelectOptions(
+      elements.catalogSetor,
+      Object.keys(CONFIG_GERAL).sort(),
+      previousCatalogSetor || state.setor
+    );
+  }
+
+  buildFilterOptions();
+  renderContext();
+  renderPublicTable();
+  renderCountTable();
+  renderCatalogTable();
+}
+
+function removeCatalogEntryByKey(entryKey) {
+  const parsed = parseCatalogEntryKey(entryKey);
+  if (!parsed) {
+    setCatalogMessage("error", "Produto invalido para remocao.");
+    return;
+  }
+
+  const key = buildCatalogEntryKey(parsed);
+  const existedInBase = configHasCatalogEntry(BASE_CONFIG_GERAL, parsed);
+
+  state.catalogAdditions = state.catalogAdditions.filter(
+    (entry) => buildCatalogEntryKey(entry) !== key
+  );
+  state.catalogRemovals = state.catalogRemovals.filter(
+    (entry) => buildCatalogEntryKey(entry) !== key
+  );
+
+  if (existedInBase) {
+    state.catalogRemovals.push(parsed);
+  }
+
+  applyCatalogOverridesFromState();
+  persistCatalogOverrides();
+  refreshCatalogDependentUI();
+  setCatalogMessage("success", `${parsed.produto} ${parsed.marca} removido do catalogo.`);
+}
+
+function addCatalogEntryFromForm() {
+  if (
+    !elements.catalogSetor ||
+    !elements.catalogProduto ||
+    !elements.catalogMarca ||
+    !elements.catalogCaixas ||
+    !elements.catalogNoTipo
+  ) {
+    return;
+  }
+
+  const addition = normalizeCatalogAdditionEntry({
+    setor: elements.catalogSetor.value,
+    produto: elements.catalogProduto.value,
+    marca: elements.catalogMarca.value,
+    caixasPallet: elements.catalogCaixas.value,
+    noTipo: elements.catalogNoTipo.checked,
+  });
+
+  if (!addition) {
+    setCatalogMessage(
+      "warn",
+      "Preencha setor, produto, marca e caixas por pallet com valor valido."
+    );
+    return;
+  }
+
+  const key = buildCatalogEntryKey(addition);
+  state.catalogRemovals = state.catalogRemovals.filter(
+    (entry) => buildCatalogEntryKey(entry) !== key
+  );
+  state.catalogAdditions = state.catalogAdditions.filter(
+    (entry) => buildCatalogEntryKey(entry) !== key
+  );
+  state.catalogAdditions.push(addition);
+
+  applyCatalogOverridesFromState();
+  persistCatalogOverrides();
+  refreshCatalogDependentUI();
+
+  elements.catalogProduto.value = "";
+  elements.catalogMarca.value = "";
+  elements.catalogCaixas.value = "";
+  elements.catalogNoTipo.checked = false;
+
+  setCatalogMessage(
+    "success",
+    `${addition.produto} ${addition.marca} salvo no catalogo (${addition.setor}).`
+  );
+}
+
+function resetCatalogOverridesToDefault() {
+  if (!state.catalogAdditions.length && !state.catalogRemovals.length) {
+    setCatalogMessage("info", "Catalogo ja esta no padrao original.");
+    return;
+  }
+
+  const confirmed = window.confirm(
+    "Deseja restaurar o catalogo original? Isso remove todas as personalizacoes deste aparelho."
+  );
+  if (!confirmed) return;
+
+  state.catalogAdditions = [];
+  state.catalogRemovals = [];
+  applyCatalogOverridesFromState();
+  persistCatalogOverrides();
+  refreshCatalogDependentUI();
+  setCatalogMessage("success", "Catalogo original restaurado.");
+}
+
+function initCatalogForm() {
+  if (!elements.catalogSetor) return;
+  setSelectOptions(elements.catalogSetor, Object.keys(CONFIG_GERAL).sort(), state.setor);
+  renderCatalogTable();
+}
+
 let countDraftPersistTimer = null;
 
 function getCountDraftStorageKey(userId = state.user?.id) {
@@ -1343,6 +1811,11 @@ function renderCountSyncStatus() {
   if (!elements.countSyncBanner) return;
 
   if (!state.user) {
+    elements.countSyncBanner.classList.add("hidden");
+    return;
+  }
+
+  if (PAGE_MODE === "edit" && state.editSection === "products") {
     elements.countSyncBanner.classList.add("hidden");
     return;
   }
@@ -1613,6 +2086,27 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+function formatDate(value) {
+  if (!value) return "--";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "--";
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
+function formatTime(value) {
+  if (!value) return "--";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "--";
+  return new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
 function storeUserLabel(userId, email) {
   if (!userId || !email) return;
   const label = displayUserFromEmail(email);
@@ -1646,9 +2140,18 @@ function formatLastUpdateText(dateValue, userId) {
   return `${dateText} | ${userText}`;
 }
 
+function formatPublicLastUpdateText(dateValue, userId) {
+  const userText = formatUserLabel(userId);
+  const dateText = formatDate(dateValue);
+  const timeText = formatTime(dateValue);
+  if (userText === "--" && dateText === "--" && timeText === "--") return "--";
+  if (userText === "--") return `-- em ${dateText} às ${timeText}`;
+  return `${userText} em ${dateText} às ${timeText}`;
+}
+
 function renderLastUpdate() {
   if (elements.publicLastUpdate) {
-    elements.publicLastUpdate.textContent = formatLastUpdateText(
+    elements.publicLastUpdate.textContent = formatPublicLastUpdateText(
       state.lastUpdatePublicAt,
       state.lastUpdatePublicBy
     );
@@ -4420,13 +4923,25 @@ function showAuthPanel() {
     elements.authPanel.scrollIntoView({ behavior: "smooth" });
   }
   if (elements.countPanel) elements.countPanel.classList.add("hidden");
+  if (elements.productsPanel) elements.productsPanel.classList.add("hidden");
 }
 
 function showCountPanel() {
   if (elements.authPanel) elements.authPanel.classList.add("hidden");
+  if (elements.productsPanel) elements.productsPanel.classList.add("hidden");
   if (elements.countPanel) {
     elements.countPanel.classList.remove("hidden");
     elements.countPanel.scrollIntoView({ behavior: "smooth" });
+  }
+  setEditSection(state.editSection || "stock");
+}
+
+function showProductsPanel() {
+  if (elements.authPanel) elements.authPanel.classList.add("hidden");
+  if (elements.countPanel) elements.countPanel.classList.add("hidden");
+  if (elements.productsPanel) {
+    elements.productsPanel.classList.remove("hidden");
+    elements.productsPanel.scrollIntoView({ behavior: "smooth" });
   }
 }
 
@@ -4910,10 +5425,60 @@ async function removeRow(row) {
 
 function hideCountPanels() {
   if (elements.countPanel) elements.countPanel.classList.add("hidden");
+  if (elements.productsPanel) elements.productsPanel.classList.add("hidden");
 }
 
 function hideAuthPanel() {
   if (elements.authPanel) elements.authPanel.classList.add("hidden");
+}
+
+function isSidebarMobileViewport() {
+  return window.matchMedia("(max-width: 980px)").matches;
+}
+
+function setSidebarOpen(open) {
+  const shouldOpen = Boolean(open) && isSidebarMobileViewport();
+  document.body.classList.toggle("sidebar-open", shouldOpen);
+  if (elements.sidebarToggle) {
+    elements.sidebarToggle.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+    elements.sidebarToggle.setAttribute(
+      "aria-label",
+      shouldOpen ? "Fechar menu" : "Abrir menu"
+    );
+  }
+}
+
+function setEditSection(section) {
+  const nextSection = section === "products" ? "products" : "stock";
+  state.editSection = nextSection;
+  const isProducts = nextSection === "products";
+
+  if (elements.sectionStockBtn && elements.sectionProductsBtn) {
+    elements.sectionStockBtn.classList.toggle("primary", !isProducts);
+    elements.sectionStockBtn.classList.toggle("ghost", isProducts);
+    elements.sectionProductsBtn.classList.toggle("primary", isProducts);
+    elements.sectionProductsBtn.classList.toggle("ghost", !isProducts);
+    elements.sectionStockBtn.setAttribute("aria-pressed", isProducts ? "false" : "true");
+    elements.sectionProductsBtn.setAttribute("aria-pressed", isProducts ? "true" : "false");
+  }
+
+  if (elements.countModeBar) {
+    elements.countModeBar.classList.toggle("hidden", isProducts);
+  }
+  if (elements.voiceCard) {
+    elements.voiceCard.classList.toggle("hidden", isProducts);
+  }
+  if (elements.manualCard) {
+    elements.manualCard.classList.toggle("hidden", isProducts);
+  }
+  if (elements.countItemsCard) {
+    elements.countItemsCard.classList.toggle("hidden", isProducts);
+  }
+  if (elements.catalogCard) {
+    elements.catalogCard.classList.toggle("hidden", !isProducts);
+  }
+
+  renderCountSyncStatus();
 }
 
 /*
@@ -5534,6 +6099,69 @@ function setupEvents() {
     }
   }
 
+  if (elements.menuProducts) {
+    if (elements.menuProducts.dataset.href) {
+      elements.menuProducts.addEventListener("click", () => {
+        window.location.href = elements.menuProducts.dataset.href;
+      });
+    } else {
+      elements.menuProducts.addEventListener("click", () => {
+        if (state.user) {
+          showProductsPanel();
+        } else {
+          showAuthPanel();
+        }
+      });
+    }
+  }
+
+  if (elements.sidebarToggle) {
+    elements.sidebarToggle.addEventListener("click", () => {
+      setSidebarOpen(!document.body.classList.contains("sidebar-open"));
+    });
+  }
+
+  if (elements.sidebarOverlay) {
+    elements.sidebarOverlay.addEventListener("click", () => {
+      setSidebarOpen(false);
+    });
+  }
+
+  const closeSidebarAfterNavigation = () => {
+    if (isSidebarMobileViewport()) {
+      setSidebarOpen(false);
+    }
+  };
+  [
+    elements.menuView,
+    elements.menuDashboard,
+    elements.menuCount,
+    elements.menuProducts,
+    elements.menuLogout,
+  ].forEach(
+    (button) => {
+      if (!button) return;
+      button.addEventListener("click", closeSidebarAfterNavigation);
+    }
+  );
+  window.addEventListener("resize", () => {
+    if (!isSidebarMobileViewport()) {
+      setSidebarOpen(false);
+    }
+  });
+
+  if (elements.sectionStockBtn) {
+    elements.sectionStockBtn.addEventListener("click", () => {
+      setEditSection("stock");
+    });
+  }
+
+  if (elements.sectionProductsBtn) {
+    elements.sectionProductsBtn.addEventListener("click", () => {
+      setEditSection("products");
+    });
+  }
+
   if (elements.publicViewDetailedBtn) {
     elements.publicViewDetailedBtn.addEventListener("click", () => {
       setPublicViewMode("detailed");
@@ -5778,6 +6406,26 @@ function setupEvents() {
     });
   }
 
+  if (elements.catalogAddBtn) {
+    elements.catalogAddBtn.addEventListener("click", () => {
+      addCatalogEntryFromForm();
+    });
+  }
+
+  if (elements.catalogResetBtn) {
+    elements.catalogResetBtn.addEventListener("click", () => {
+      resetCatalogOverridesToDefault();
+    });
+  }
+
+  if (elements.catalogTableBody) {
+    elements.catalogTableBody.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-catalog-key]");
+      if (!button) return;
+      removeCatalogEntryByKey(button.dataset.catalogKey);
+    });
+  }
+
   if (elements.publicExportToggle) {
     elements.publicExportToggle.addEventListener("click", () => {
       openExportSheet("public");
@@ -5923,6 +6571,7 @@ function setupEvents() {
     if (event.key === "Escape") {
       closeExportSheet("public");
       closeExportSheet("count");
+      setSidebarOpen(false);
     }
   });
 
@@ -5986,7 +6635,11 @@ async function handleAuthState(event, session) {
       updateCountModeUI();
       await loadUserRecords();
       restoreCountDraftForCurrentUser();
-      renderCountSyncStatus();
+      setEditSection(state.editSection || "stock");
+    } else if (PAGE_MODE === "products") {
+      hideAuthPanel();
+      showProductsPanel();
+      renderCatalogTable();
     } else {
       hideAuthPanel();
       hideCountPanels();
@@ -6005,10 +6658,14 @@ async function handleAuthState(event, session) {
       hideCountPanels();
       state.userRows = [];
       state.countMode = "current";
+      state.editSection = "stock";
       state.countDraftSavedAt = null;
       state.countDraftHash = "";
       renderCountTable();
       renderCountSyncStatus();
+    } else if (PAGE_MODE === "products") {
+      showAuthPanel();
+      hideCountPanels();
     } else {
       hideAuthPanel();
       hideCountPanels();
@@ -6050,10 +6707,26 @@ function initSetorSelects() {
     });
     elements.editSetor.value = state.setor;
   }
+
+  if (elements.catalogSetor) {
+    elements.catalogSetor.innerHTML = "";
+    setores
+      .slice()
+      .sort()
+      .forEach((setor) => {
+        const option = document.createElement("option");
+        option.value = setor;
+        option.textContent = setor;
+        elements.catalogSetor.appendChild(option);
+      });
+    elements.catalogSetor.value = state.setor;
+  }
 }
 // Bootstrap final: monta selects, listeners, autenticacao e carrega os dados iniciais.
+loadCatalogOverridesFromStorage();
 initSetorSelects();
 initManualForm();
+initCatalogForm();
 buildFilterOptions();
 renderContext();
 renderPublicTable();
@@ -6063,6 +6736,7 @@ setCountViewMode(state.countViewMode);
 updateCountModeUI();
 setupVoice();
 setupEvents();
+setSidebarOpen(false);
 setupDashboard();
 setupAuth();
 loadPublicRecords();

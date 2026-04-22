@@ -20,12 +20,58 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
     />
-    <link rel="stylesheet" href="styles.css?v=20260325-1" />
+    <link rel="stylesheet" href="styles.css?v=20260422-5" />
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
   <body data-page="edit">
     <!-- Pagina operacional de contagem: login, voz, formulario manual e sincronizacao. -->
+    <aside id="app-sidebar" class="sidebar" aria-label="Navegacao principal">
+      <div class="sidebar-top">
+        <img src="assets/img/logo.webp" alt="Frutamina" class="sidebar-logo" />
+      </div>
+      <nav class="sidebar-nav">
+        <button id="menu-view" class="ghost" data-href="index.html" type="button">
+          <i class="bi bi-box-seam"></i>
+          <span class="sidebar-label">Estoque</span>
+        </button>
+        <button id="menu-dashboard" class="ghost" data-href="visao-geral.html" type="button">
+          <i class="bi bi-bar-chart-line"></i>
+          <span class="sidebar-label">Visao geral</span>
+        </button>
+        <button id="menu-count" class="primary" type="button">
+          <i class="bi bi-pencil-square"></i>
+          <span class="sidebar-label">Editar estoque</span>
+        </button>
+        <button id="menu-products" class="ghost" data-href="produtos.html" type="button">
+          <i class="bi bi-boxes"></i>
+          <span class="sidebar-label">Produtos</span>
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <div id="menu-user" class="user-chip hidden">
+          <span>Usuario</span>
+          <strong id="menu-user-email">--</strong>
+        </div>
+        <button id="menu-logout" class="ghost hidden" type="button">
+          <i class="bi bi-box-arrow-right"></i>
+          <span class="sidebar-label">Sair</span>
+        </button>
+      </div>
+    </aside>
+    <div id="sidebar-overlay" class="sidebar-overlay" aria-hidden="true"></div>
     <div class="app">
+      <header class="mobile-topbar">
+        <img src="assets/img/logo.webp" alt="Frutamina" class="mobile-topbar-logo" />
+        <button
+          id="sidebar-toggle"
+          class="sidebar-toggle"
+          type="button"
+          aria-label="Abrir menu"
+          aria-expanded="false"
+        >
+          <i class="bi bi-list"></i>
+        </button>
+      </header>
       <!-- Cabecalho visual da area de edicao. -->
       <header class="hero">
         <div>
@@ -34,20 +80,6 @@
           <h1>Editar Estoque</h1>
         </div>
       </header>
-
-      <!-- Navegacao principal entre as tres paginas. -->
-      <nav class="menu">
-        <button id="menu-view" class="ghost" data-href="index.html">Estoque</button>
-        <button id="menu-dashboard" class="ghost" data-href="visao-geral.html">
-          Visão geral
-        </button>
-        <button id="menu-count" class="primary">Editar estoque</button>
-        <div id="menu-user" class="user-chip hidden">
-          <span>Usuário</span>
-          <strong id="menu-user-email">--</strong>
-        </div>
-        <button id="menu-logout" class="ghost hidden">Sair</button>
-      </nav>
 
       <!-- Login do operador antes de liberar a area de contagem. -->
       <section id="auth-panel" class="card">
@@ -80,7 +112,7 @@
           </div>
         </section>
         <!-- Troca entre estoque atual e nova contagem offline. -->
-        <section class="count-mode-bar">
+        <section id="count-mode-bar" class="count-mode-bar">
           <div class="count-mode-row">
             <div class="actions count-mode-toggle">
               <button id="mode-current" class="primary" type="button">Estoque atual</button>
@@ -119,7 +151,7 @@
           </section>
 
           <!-- Lancamento manual por tabela (setor, produto, marca, tipo e quantidade). -->
-          <section class="card full">
+          <section id="manual-card" class="card full">
             <div class="card-header">
               <h2>Comando Manual</h2>
               <p>Selecione os campos abaixo para adicionar o item. Para lancar so caixas avulsas, deixe pallets em 0.</p>
@@ -174,9 +206,8 @@
             </div>
             <div id="messages" class="msg-area"></div>
           </section>
-
           <!-- Tabela dos itens contados no setor atual, com edicao e remocao. -->
-          <section class="card full">
+          <section id="count-items-card" class="card full">
             <div class="card-header">
               <h2>Itens Contados</h2>
               <p>Visualização por setor atual.</p>
@@ -330,7 +361,7 @@
       </div>
     </div>
 
-    <script src="assets/app.js?v=20260325-7"></script>
+    <script src="assets/app.js?v=20260422-3"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {

@@ -20,12 +20,58 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
     />
-    <link rel="stylesheet" href="styles.css?v=20260325-1" />
+    <link rel="stylesheet" href="styles.css?v=20260422-5" />
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
   <body data-page="view">
     <!-- Pagina publica de estoque: consulta, filtro, exportacao e impressao. -->
+    <aside id="app-sidebar" class="sidebar" aria-label="Navegacao principal">
+      <div class="sidebar-top">
+        <img src="assets/img/logo.webp" alt="Frutamina" class="sidebar-logo" />
+      </div>
+      <nav class="sidebar-nav">
+        <button id="menu-view" class="primary" type="button">
+          <i class="bi bi-box-seam"></i>
+          <span class="sidebar-label">Estoque</span>
+        </button>
+        <button id="menu-dashboard" class="ghost" data-href="visao-geral.html" type="button">
+          <i class="bi bi-bar-chart-line"></i>
+          <span class="sidebar-label">Visao geral</span>
+        </button>
+        <button id="menu-count" class="ghost" data-href="editar.html" type="button">
+          <i class="bi bi-pencil-square"></i>
+          <span class="sidebar-label">Editar estoque</span>
+        </button>
+        <button id="menu-products" class="ghost" data-href="produtos.html" type="button">
+          <i class="bi bi-boxes"></i>
+          <span class="sidebar-label">Produtos</span>
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <div id="menu-user" class="user-chip hidden">
+          <span>Usuario</span>
+          <strong id="menu-user-email">--</strong>
+        </div>
+        <button id="menu-logout" class="ghost hidden" type="button">
+          <i class="bi bi-box-arrow-right"></i>
+          <span class="sidebar-label">Sair</span>
+        </button>
+      </div>
+    </aside>
+    <div id="sidebar-overlay" class="sidebar-overlay" aria-hidden="true"></div>
     <div class="app">
+      <header class="mobile-topbar">
+        <img src="assets/img/logo.webp" alt="Frutamina" class="mobile-topbar-logo" />
+        <button
+          id="sidebar-toggle"
+          class="sidebar-toggle"
+          type="button"
+          aria-label="Abrir menu"
+          aria-expanded="false"
+        >
+          <i class="bi bi-list"></i>
+        </button>
+      </header>
       <!-- Cabecalho visual da pagina. -->
       <header class="hero">
         <div>
@@ -35,37 +81,26 @@
         </div>
       </header>
 
-      <!-- Navegacao principal entre Estoque, Visao geral e Edicao. -->
-      <nav class="menu">
-        <button id="menu-view" class="primary">Estoque</button>
-        <button id="menu-dashboard" class="ghost" data-href="visao-geral.html">
-          Visão geral
-        </button>
-        <button id="menu-count" class="ghost" data-href="editar.html">Editar estoque</button>
-        <div id="menu-user" class="user-chip hidden">
-          <span>Usuário</span>
-          <strong id="menu-user-email">--</strong>
-        </div>
-        <button id="menu-logout" class="ghost hidden">Sair</button>
-      </nav>
-
       <!-- Painel principal com busca, filtros e tabela publica do estoque. -->
-      <section id="public-panel" class="card">
-        <div class="card-header">
+      <section id="public-panel" class="card public-section">
+        <div class="public-section-header">
           <h2>Contagem do Estoque</h2>
-          <p>Estoque atual. Para editar o estoque, clique em 'Editar estoque'.</p>
+          <p>Estoque atual. Para editar, acesse <a href="editar.html">Editar estoque</a>.</p>
+          <div class="last-update public-last-update">
+            Estoque atualizado por <strong id="public-last-update">--</strong>
+          </div>
         </div>
-        <form id="public-search-form" class="context-actions" role="search" autocomplete="off">
+        <form id="public-search-form" class="public-toolbar" role="search" autocomplete="off">
           <div class="autofill-trap" aria-hidden="true">
             <input type="text" name="username" autocomplete="username" tabindex="-1" />
             <input type="password" name="password" autocomplete="current-password" tabindex="-1" />
           </div>
-          <label for="public-search">Pesquisar</label>
+          <label for="public-search" class="sr-only">Pesquisar</label>
           <input
             id="public-search"
             type="search"
             name="public-search"
-            placeholder="Produto, marca ou tipo"
+            placeholder="Pesquisar por produto, marca, tipo..."
             autocomplete="off"
             autocorrect="off"
             autocapitalize="off"
@@ -76,36 +111,44 @@
             data-1p-ignore="true"
             data-form-type="other"
           />
-          <button id="public-filter-btn" class="ghost" type="button">Filtro</button>
-          <button id="public-refresh" class="ghost" type="button">Atualizar</button>
-        </form>
-        <div class="table-modes">
-          <div id="public-view-toggle" class="view-toggle" role="group" aria-label="Modo de tabela">
-            <button
-              id="public-view-detailed"
-              class="view-toggle-btn"
-              type="button"
-              aria-pressed="true"
-              title="Detalhada"
-            >
-              <i class="bi bi-tablet-landscape"></i>
+          <div class="public-toolbar-actions">
+            <button id="public-filter-btn" class="ghost" type="button">
+              <i class="bi bi-funnel"></i>
+              Filtros
             </button>
-            <button
-              id="public-view-summary"
-              class="view-toggle-btn"
-              type="button"
-              aria-pressed="false"
-              title="Resumo"
-            >
-              <i class="bi bi-file-spreadsheet"></i>
+            <button id="public-refresh" class="ghost" type="button">
+              <i class="bi bi-arrow-clockwise"></i>
+              Atualizar
+            </button>
+            <button id="public-export-toggle" class="ghost" type="button">
+              <i class="bi bi-download"></i>
+              Exportar
             </button>
           </div>
-        </div>
-        <div class="last-update">
-          Última atualização: <strong id="public-last-update">--</strong>
-        </div>
-        <div class="actions table-tools">
-          <button id="public-export-toggle" class="ghost">Exportar</button>
+        </form>
+        <div class="public-table-controls">
+          <div class="table-modes public-table-modes">
+            <div id="public-view-toggle" class="view-toggle" role="group" aria-label="Modo de tabela">
+              <button
+                id="public-view-detailed"
+                class="view-toggle-btn"
+                type="button"
+                aria-pressed="true"
+                title="Detalhada"
+              >
+                <i class="bi bi-tablet-landscape"></i>
+              </button>
+              <button
+                id="public-view-summary"
+                class="view-toggle-btn"
+                type="button"
+                aria-pressed="false"
+                title="Resumo"
+              >
+                <i class="bi bi-file-spreadsheet"></i>
+              </button>
+            </div>
+          </div>
         </div>
         <div id="public-table-detailed">
           <div class="table-wrap">
@@ -302,7 +345,7 @@
         </div>
       </section>
     </div>
-    <script src="assets/app.js?v=20260325-7"></script>
+    <script src="assets/app.js?v=20260422-3"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
