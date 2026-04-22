@@ -1000,6 +1000,7 @@ th {
   display: grid;
   gap: 16px;
   margin-top: 16px;
+  min-width: 0;
 }
 
 .summary-card {
@@ -1007,6 +1008,7 @@ th {
   border-radius: 12px;
   padding: 12px;
   background: #ffffff;
+  min-width: 0;
 }
 
 .summary-header {
@@ -1066,6 +1068,34 @@ th {
 .summary-table tfoot td {
   font-weight: 600;
   background: #f8fafc;
+}
+
+#public-table-summary,
+#count-table-summary {
+  min-width: 0;
+  width: 100%;
+}
+
+#public-table-summary .summary-card .table-wrap,
+#count-table-summary .summary-card .table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+#public-table-summary .summary-table,
+#count-table-summary .summary-table {
+  width: max-content;
+  min-width: 100%;
+}
+
+#public-table-summary .summary-table th,
+#public-table-summary .summary-table td,
+#count-table-summary .summary-table th,
+#count-table-summary .summary-table td {
+  white-space: nowrap;
 }
 
 .summary-colorized .cell-tipo,
@@ -1519,6 +1549,28 @@ th {
     padding: 8px 7px;
     font-size: 12px;
   }
+
+  .summary-card {
+    padding: 10px;
+  }
+
+  .summary-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  #public-table-summary .summary-table,
+  #count-table-summary .summary-table {
+    font-size: 11px;
+  }
+
+  #public-table-summary .summary-table th,
+  #public-table-summary .summary-table td,
+  #count-table-summary .summary-table th,
+  #count-table-summary .summary-table td {
+    padding: 5px 6px;
+  }
 }
 
 @media (max-width: 560px) {
@@ -1548,6 +1600,14 @@ th {
 
   .public-section-header h2 {
     font-size: 22px;
+  }
+
+  #public-table-summary .summary-table th,
+  #public-table-summary .summary-table td,
+  #count-table-summary .summary-table th,
+  #count-table-summary .summary-table td {
+    padding: 4px 5px;
+    font-size: 10px;
   }
 }
 
