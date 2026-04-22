@@ -21,6 +21,7 @@ body {
   color: #1f2937;
   min-height: 100vh;
   padding-left: 92px;
+  overflow-x: hidden;
 }
 
 .app {
@@ -290,6 +291,10 @@ body.sidebar-open .sidebar .sidebar-footer .user-chip {
 .public-section {
   display: grid;
   gap: 14px;
+}
+
+.public-section > * {
+  min-width: 0;
 }
 
 .public-section-header {
@@ -721,6 +726,7 @@ table.manual-table td:last-child {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .public-toolbar input {
@@ -732,6 +738,7 @@ table.manual-table td:last-child {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .public-toolbar-actions button {
@@ -741,20 +748,36 @@ table.manual-table td:last-child {
   gap: 8px;
   white-space: nowrap;
   border-radius: 12px;
+  min-width: 0;
 }
 
 .public-toolbar-actions button i {
   font-size: 14px;
 }
 
+#public-table-detailed,
+#public-table-summary {
+  min-width: 0;
+}
+
 #public-table-detailed .table-wrap {
   margin-top: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+#public-table-detailed table {
+  min-width: 720px;
 }
 
 .public-table-controls {
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  min-width: 0;
 }
 
 .public-table-modes {
@@ -1453,6 +1476,10 @@ th {
 }
 
 @media (max-width: 720px) {
+  .card {
+    padding: 16px;
+  }
+
   .sync-banner {
     flex-direction: column;
   }
@@ -1482,15 +1509,45 @@ th {
   .public-table-controls {
     justify-content: center;
   }
+
+  #public-table-detailed table {
+    min-width: 640px;
+  }
+
+  th,
+  td {
+    padding: 8px 7px;
+    font-size: 12px;
+  }
 }
 
 @media (max-width: 560px) {
+  .app {
+    padding: 10px 10px 28px;
+  }
+
+  .mobile-topbar {
+    padding: 10px 12px;
+  }
+
+  .card {
+    padding: 14px;
+  }
+
   .public-toolbar-actions {
     grid-template-columns: 1fr;
   }
 
   .public-toolbar-actions button:last-child {
     grid-column: auto;
+  }
+
+  #public-table-detailed table {
+    min-width: 600px;
+  }
+
+  .public-section-header h2 {
+    font-size: 22px;
   }
 }
 
