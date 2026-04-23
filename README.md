@@ -1,48 +1,48 @@
 # Projeto Estoque CD (Frutamina)
 
-Aplicacao web (PWA) para contagem e acompanhamento de estoque do CD, com:
+Aplicação web (PWA) para contagem e acompanhamento de estoque do CD, com:
 
-- consulta publica do estoque;
-- edicao por usuario autenticado;
-- lancamento por voz e manual;
+- consulta pública do estoque;
+- edição por usuário autenticado;
+- lançamento por voz e manual;
 - modo de **nova contagem** com rascunho offline;
-- dashboard historico com total de caixas e saida entre contagens;
-- exportacao para CSV e impressao/PDF.
+- dashboard histórico com total de caixas e saída entre contagens;
+- exportação para CSV e impressão/PDF.
 
-## Visao Geral
+## Visão Geral
 
-O sistema e 100% frontend (HTML/CSS/JavaScript) e usa o Supabase como backend (Auth + Postgres + RLS).
+O sistema é 100% frontend (HTML/CSS/JavaScript) e usa o Supabase como backend (Auth + Postgres + RLS).
 
 Fluxo principal:
 
-1. Usuario faz login em `editar.html`.
-2. Lanca itens no estoque atual ou inicia uma nova contagem.
-3. O sistema salva no Supabase (modo atual) ou localmente ate sincronizar (modo nova contagem).
+1. Usuário faz login em `editar.html`.
+2. Lança itens no estoque atual ou inicia uma nova contagem.
+3. O sistema salva no Supabase (modo atual) ou localmente até sincronizar (modo nova contagem).
 4. Ao salvar a nova contagem, o sistema substitui a contagem antiga e grava snapshot para o dashboard.
 
 ## Funcionalidades
 
-- **Estoque publico (`index.html`)**
+- **Estoque público (`index.html`)**
   - tabela detalhada e tabela-resumo;
   - busca por texto;
   - filtros por setor/produto/marca/tipo;
-  - exportacao CSV;
-  - impressao/PDF (via janela de impressao).
+  - exportação CSV;
+  - impressão/PDF (via janela de impressão).
 
-- **Edicao (`editar.html`)**
-  - login por usuario/senha;
+- **Edição (`editar.html`)**
+  - login por usuário/senha;
   - comando por voz (Web Speech API);
-  - lancamento manual com selects dependentes;
-  - edicao e remocao de itens;
-  - alternancia entre:
+  - lançamento manual com selects dependentes;
+  - edição e remoção de itens;
+  - alternância entre:
     - `Estoque atual` (grava direto no Supabase);
-    - `Nova contagem` (rascunho local com sincronizacao posterior).
+    - `Nova contagem` (rascunho local com sincronização posterior).
 
-- **Visao Geral (`visao-geral.html`)**
-  - grafico de total de caixas;
-  - grafico de caixas que sairam;
-  - filtros de periodo: `1D`, `5D`, `1M`, `6M`, `1Y`, `5Y`, `MAX`;
-  - relatorio detalhado da ultima comparacao salva.
+- **Visão Geral (`visao-geral.html`)**
+  - gráfico de total de caixas;
+  - gráfico de caixas que saíram;
+  - filtros de período: `1D`, `5D`, `1M`, `6M`, `1Y`, `5Y`, `MAX`;
+  - relatório detalhado da última comparação salva.
 
 - **PWA**
   - manifesto (`manifest.webmanifest`);

@@ -20,12 +20,12 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
     />
-    <link rel="stylesheet" href="styles.css?v=20260423-1" />
+    <link rel="stylesheet" href="styles.css?v=20260423-6" />
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
   <body data-page="edit">
-    <!-- Pagina operacional de contagem: login, voz, formulario manual e sincronizacao. -->
-    <aside id="app-sidebar" class="sidebar" aria-label="Navegacao principal">
+    <!-- Página operacional de contagem: login, voz, formulário manual e sincronização. -->
+    <aside id="app-sidebar" class="sidebar" aria-label="Navegação principal">
       <div class="sidebar-top">
         <img src="assets/img/logo.webp" alt="Frutamina" class="sidebar-logo" />
       </div>
@@ -36,7 +36,7 @@
         </button>
         <button id="menu-dashboard" class="ghost" data-href="visao-geral.html" type="button">
           <i class="bi bi-bar-chart-line"></i>
-          <span class="sidebar-label">Visao geral</span>
+          <span class="sidebar-label">Visão geral</span>
         </button>
         <button id="menu-count" class="primary" type="button">
           <i class="bi bi-pencil-square"></i>
@@ -59,7 +59,7 @@
           <span id="theme-toggle-label" class="sidebar-label">Tema escuro</span>
         </button>
         <div id="menu-user" class="user-chip hidden">
-          <span>Usuario</span>
+          <span>Usuário</span>
           <strong id="menu-user-email">--</strong>
         </div>
         <button id="menu-logout" class="ghost hidden" type="button">
@@ -93,7 +93,7 @@
           </button>
         </div>
       </header>
-      <!-- Cabecalho visual da area de edicao. -->
+      <!-- Cabeçalho visual da área de edição. -->
       <header class="hero">
         <div>
           <img src="assets/img/logo.webp" alt="logo" class="logo" />
@@ -106,7 +106,7 @@
       <section id="auth-panel" class="card">
         <div class="card-header">
           <h2>Acesso</h2>
-          <p>Entre com seu usuário do CD para começar a contagem.</p>
+          <p>Entre com seu usuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio do CD para comeÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ar a contagem.</p>
         </div>
         <div class="form-grid">
           <label for="email">Usuario</label>
@@ -152,23 +152,57 @@
             </button>
           </div>
         </section>
-        <div class="grid">
-          <!-- Card de voz com feedback do que foi reconhecido pelo microfone. -->
+        <div class="grid count-layout">
+          <div class="count-left-column">
+          <!-- Card de voz com contexto travado, escuta e comando manual. -->
           <section class="card voice-card" id="voice-card">
-            <div class="voice-visual" aria-hidden="true">
-              <span></span>
-              <span></span>
-              <span></span>
-              <span></span>
+            <div class="voice-card-header">
+              <h2><i class="bi bi-mic"></i>Comando por Voz</h2>
+              <span class="voice-engine">Chrome / Edge</span>
             </div>
-            <button id="voice-btn" class="primary voice-action">Iniciar escuta</button>
+
+            <div class="voice-context-box">
+              <h3>Contexto travado</h3>
+              <p>
+                Setor: <strong id="ctx-setor">--</strong>
+                <span aria-hidden="true">&middot;</span>
+                Produto: <strong id="ctx-produto">--</strong>
+                <span aria-hidden="true">&middot;</span>
+                Marca: <strong id="ctx-marca">--</strong>
+              </p>
+            </div>
+
+            <button id="voice-btn" class="voice-action" type="button">Iniciar escuta</button>
             <div id="voice-status" class="voice-status">Microfone pronto.</div>
+
             <textarea
               id="voice-last"
               rows="2"
               readonly
-              placeholder="O que a máquina está ouvindo..."
+              placeholder="O que a maquina esta ouvindo..."
             ></textarea>
+
+            <div class="voice-manual-area">
+              <p class="voice-manual-title">Comando manual de voz</p>
+              <div class="voice-command-row">
+                <input
+                  id="command-input"
+                  type="text"
+                  placeholder="ex: CAMARA FRIA, ANGEL, 4"
+                  autocomplete="off"
+                />
+                <button id="process-btn" class="ghost" type="button">Processar</button>
+              </div>
+              <div class="voice-context-actions">
+                <label class="voice-sector-button" for="setor-select">
+                  Alterar setor
+                  <select id="setor-select" aria-label="Alterar setor"></select>
+                </label>
+                <button id="clear-context" class="ghost clear-context-btn" type="button">
+                  Limpar contexto
+                </button>
+              </div>
+            </div>
           </section>
 
           <!-- Lancamento manual por tabela (setor, produto, marca, tipo e quantidade). -->
@@ -187,7 +221,7 @@
                     <th><span id="manual-label-tipo">Tipo</span></th>
                     <th><span id="manual-label-qty">Pallets</span></th>
                     <th>Caixas avulsas</th>
-                    <th>Ação</th>
+                    <th>AÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -227,11 +261,13 @@
             </div>
             <div id="messages" class="msg-area"></div>
           </section>
+          </div>
+          <div class="count-right-column">
           <!-- Tabela dos itens contados no setor atual, com edicao e remocao. -->
           <section id="count-items-card" class="card full">
             <div class="card-header">
               <h2>Itens Contados</h2>
-              <p>Visualização por setor atual.</p>
+              <p>VisualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o por setor atual.</p>
             </div>
             <div class="card-actions">
               <button id="edit-item-btn" class="ghost">Editar item</button>
@@ -259,7 +295,7 @@
               </div>
             </div>
             <div class="last-update">
-              Última atualização: <strong id="count-last-update">--</strong>
+              ÃƒÆ’Ã†â€™Ãƒâ€¦Ã‚Â¡ltima atualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: <strong id="count-last-update">--</strong>
             </div>
             <div class="actions table-tools">
               <button id="count-export-toggle" class="ghost">Exportar</button>
@@ -277,7 +313,7 @@
                       <th>Pallets</th>
                       <th>Caixas avulsas</th>
                       <th>Total Caixas</th>
-                      <th>Ações</th>
+                      <th>AÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes</th>
                     </tr>
                   </thead>
                   <tbody id="count-table-body"></tbody>
@@ -291,13 +327,7 @@
             </div>
             <div id="count-table-summary" class="hidden"></div>
           </section>
-          
-
-          
-
-          
-
-          
+          </div>
         </div>
       </section>
     </div>
@@ -322,7 +352,7 @@
           </button>
           <button id="count-export-print" class="share-option" type="button">
             <i class="bi bi-printer"></i>
-            <span>Impressão</span>
+            <span>ImpressÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</span>
           </button>
         </div>
       </div>
@@ -362,7 +392,7 @@
           <button id="edit-save" class="primary">Salvar</button>
         </div>
         <div class="debug-card hidden" id="debug-panel">
-          <h4>Diagnóstico</h4>
+          <h4>DiagnÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³stico</h4>
           <div class="debug-row">
             <strong>URL:</strong> <span id="debug-url">--</span>
           </div>
@@ -382,7 +412,7 @@
       </div>
     </div>
 
-    <script src="assets/app.js?v=20260423-1"></script>
+    <script src="assets/app.js?v=20260423-2"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
@@ -394,4 +424,3 @@
     </script>
   </body>
 </html>
-

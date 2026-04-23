@@ -1911,6 +1911,385 @@ body[data-page="dashboard"] .hero {
   font-weight: 700;
 }
 
+/*
+  ===== Layout da contagem (Editar Estoque) =====
+  Ajuste estrutural de posicionamento/tamanho dos cards.
+*/
+
+body[data-page="edit"] #count-panel {
+  display: grid;
+  gap: 16px;
+}
+
+body[data-page="edit"] .count-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 410px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+body[data-page="edit"] .count-left-column {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-content: start;
+  min-width: 0;
+}
+
+body[data-page="edit"] .count-right-column {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+body[data-page="edit"] .count-left-column > *,
+body[data-page="edit"] .count-right-column > * {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+body[data-page="edit"] #manual-card {
+  order: 1;
+  min-height: 0;
+  align-self: start;
+}
+
+body[data-page="edit"] #voice-card {
+  order: 2;
+  min-height: 220px;
+  height: auto;
+  align-self: start;
+  display: grid;
+  gap: 12px;
+  place-items: initial;
+  text-align: left;
+  padding: 16px;
+  border: 1px solid #22324a;
+  background: linear-gradient(180deg, #0f172a 0%, #08101d 100%);
+  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.35);
+}
+
+body[data-page="edit"] #voice-card .voice-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #1e2d44;
+}
+
+body[data-page="edit"] #voice-card .voice-card-header h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+body[data-page="edit"] #voice-card .voice-card-header i {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+body[data-page="edit"] #voice-card .voice-engine {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid #2a3a57;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #9fb2d4;
+  white-space: nowrap;
+}
+
+body[data-page="edit"] #voice-card .voice-context-box {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #2a3a57;
+  border-radius: 10px;
+  padding: 12px;
+  background: rgba(17, 28, 49, 0.68);
+}
+
+body[data-page="edit"] #voice-card .voice-context-box h3 {
+  margin: 0;
+  font-size: 20px;
+}
+
+body[data-page="edit"] #voice-card .voice-context-box p {
+  margin: 0;
+  font-size: 15px;
+  color: #b4c3dd;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+body[data-page="edit"] #voice-card .voice-context-box strong {
+  color: #e2ecff;
+}
+
+body[data-page="edit"] #voice-card .voice-action {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-height: 46px;
+  border: 1px solid #51637f;
+  border-radius: 10px;
+  background: rgba(71, 85, 105, 0.2);
+  color: #dbe7ff;
+  font-size: 17px;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+body[data-page="edit"] #voice-card .voice-action::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #94a3b8;
+  flex: 0 0 auto;
+}
+
+body[data-page="edit"] #voice-card .voice-action:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+body[data-page="edit"] #voice-card .voice-status {
+  margin-top: -2px;
+  font-size: 15px;
+  color: #9fb2d4;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+body[data-page="edit"] #voice-card #voice-status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #64748b;
+  flex: 0 0 auto;
+}
+
+body[data-page="edit"] #voice-card #voice-last {
+  width: 100%;
+  min-height: 68px;
+  border: 1px solid #2a3a57;
+  border-radius: 10px;
+  background: rgba(12, 23, 40, 0.95);
+  color: #dbe7ff;
+  margin-top: 0;
+}
+
+body[data-page="edit"] #voice-card #voice-last::placeholder {
+  color: #8ea3c5;
+}
+
+body[data-page="edit"] #voice-card .voice-manual-area {
+  display: grid;
+  gap: 10px;
+  margin-top: 2px;
+  padding-top: 12px;
+  border-top: 1px solid #1e2d44;
+}
+
+body[data-page="edit"] #voice-card .voice-manual-title {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 11px;
+  color: #64748b;
+}
+
+body[data-page="edit"] #voice-card .voice-command-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+body[data-page="edit"] #voice-card #command-input {
+  width: 100%;
+  border-radius: 10px;
+  border-color: #2a3a57;
+  background: rgba(12, 23, 40, 0.95);
+  color: #dbe7ff;
+}
+
+body[data-page="edit"] #voice-card #command-input::placeholder {
+  color: #8ea3c5;
+}
+
+body[data-page="edit"] #voice-card #process-btn,
+body[data-page="edit"] #voice-card .voice-sector-button,
+body[data-page="edit"] #voice-card .clear-context-btn {
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1px solid #2a3a57;
+  background: transparent;
+  color: #cdd9ef;
+  box-shadow: none;
+}
+
+body[data-page="edit"] #voice-card #process-btn:hover,
+body[data-page="edit"] #voice-card .voice-sector-button:hover,
+body[data-page="edit"] #voice-card .clear-context-btn:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+body[data-page="edit"] #voice-card .voice-context-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+body[data-page="edit"] #voice-card .voice-sector-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  overflow: hidden;
+}
+
+body[data-page="edit"] #voice-card .voice-sector-button select {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+body[data-page="edit"] #voice-card .clear-context-btn {
+  color: #f87171;
+  border-color: #7f1d1d;
+}
+
+body[data-page="edit"] #voice-card.listening {
+  transform: none;
+  background: linear-gradient(180deg, #0f172a 0%, #08101d 100%);
+}
+
+body[data-page="edit"] #voice-card.listening .voice-action {
+  border-color: #b91c1c;
+  background: rgba(153, 27, 27, 0.2);
+  color: #fecaca;
+}
+
+body[data-page="edit"] #voice-card.listening .voice-action::before {
+  background: #ef4444;
+}
+
+body[data-page="edit"] #voice-card.listening #voice-status {
+  color: #fca5a5;
+}
+
+body[data-page="edit"] #voice-card.listening #voice-status::before {
+  background: #ef4444;
+}
+
+body[data-page="edit"] #count-items-card {
+  min-height: 0;
+  height: auto;
+  align-self: start;
+}
+
+body[data-page="edit"] #manual-card .table-wrap {
+  margin-top: 16px;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+body[data-page="edit"] #count-items-card .table-wrap {
+  margin-top: 12px;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+@media (max-width: 1240px) {
+  body[data-page="edit"] .count-layout {
+    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  }
+
+  body[data-page="edit"] #voice-card .voice-card-header h2 {
+    font-size: 20px;
+  }
+
+  body[data-page="edit"] #voice-card .voice-context-box h3,
+  body[data-page="edit"] #voice-card .voice-action,
+  body[data-page="edit"] #voice-card .voice-status {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 1080px) {
+  body[data-page="edit"] .count-layout {
+    grid-template-columns: 1fr;
+  }
+
+  body[data-page="edit"] .count-left-column {
+    gap: 14px;
+  }
+
+  body[data-page="edit"] #voice-card,
+  body[data-page="edit"] #manual-card,
+  body[data-page="edit"] #count-items-card {
+    min-height: auto;
+  }
+
+  body[data-page="edit"] #voice-card .voice-command-row {
+    grid-template-columns: 1fr;
+  }
+
+  body[data-page="edit"] #voice-card #process-btn {
+    width: 100%;
+  }
+
+  body[data-page="edit"] #voice-card .voice-context-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  body[data-page="edit"] #voice-card .voice-sector-button,
+  body[data-page="edit"] #voice-card .clear-context-btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  body[data-page="edit"] #voice-card {
+    padding: 14px;
+  }
+
+  body[data-page="edit"] #voice-card .voice-card-header {
+    flex-wrap: wrap;
+  }
+
+  body[data-page="edit"] #voice-card .voice-card-header h2 {
+    font-size: 18px;
+  }
+
+  body[data-page="edit"] #voice-card .voice-context-box h3,
+  body[data-page="edit"] #voice-card .voice-action,
+  body[data-page="edit"] #voice-card .voice-status {
+    font-size: 15px;
+  }
+
+  body[data-page="edit"] #voice-card .voice-context-box p {
+    font-size: 14px;
+  }
+}
+
 .hidden {
   display: none;
 }

@@ -1,4 +1,4 @@
-const SUPABASE_URL = "https://ldkazwnzfppcsoolydkp.supabase.co";
+﻿const SUPABASE_URL = "https://ldkazwnzfppcsoolydkp.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_14RDXtWzeDV-nzAHfGrNCw_lB4XsUSn";
 const TABLE_NAME = "estoque_registros";
 const SNAPSHOT_TABLE = "estoque_snapshots";
@@ -16,11 +16,11 @@ const THEME_PREFERENCE_KEY = "cd_theme_preference_v1";
   Arquivo central do sistema.
 
   Responsabilidades principais:
-  - manter as regras de negocio do estoque por setor/produto/marca;
-  - processar voz, formulario manual e edicao;
+  - manter as regras de negócio do estoque por setor/produto/marca;
+  - processar voz, formulário manual e edição;
   - salvar/recuperar o rascunho offline da nova contagem;
   - sincronizar dados com o Supabase;
-  - montar dashboard, comparacao de saida e exportacoes.
+  - montar dashboard, comparação de saída e exportações.
 */
 
 const CONFIG_GERAL = {
@@ -176,7 +176,7 @@ const BOX_KEYWORDS = new Set([
 const REMOVE_KEYWORDS = new Set(["REMOVER", "REMOVA", "DESFAZER"]);
 const CORRECT_KEYWORDS = new Set(["CORRIGIR", "CORRIGE", "CORRECAO"]);
 
-// Estado global compartilhado entre as paginas. Cada tela usa apenas parte dele.
+// Estado global compartilhado entre as páginas. Cada tela usa apenas parte dele.
 const state = {
   setor: Object.keys(CONFIG_GERAL)[0],
   produto: null,
@@ -2264,8 +2264,8 @@ function renderContext() {
 }
 
 /*
-  ===== Agregacao e comparacao =====
-  Aqui nascem os totais por item, a soma da saida e o relatorio "o que saiu?".
+  ===== Agregação e comparação =====
+  Aqui nascem os totais por item, a soma da saída e o relatório "o que saiu?".
 */
 
 function aggregateRows(rows) {
@@ -2324,8 +2324,8 @@ function calculateOutflowCaixas(previousRows, currentRows) {
 }
 
 /**
- * Reconstroi o estoque publico "apos salvar" sem depender de uma nova leitura do servidor.
- * Isso evita perder a comparacao caso o usuario troque de pagina logo depois de salvar.
+ * Reconéri o estoque público "após salvar" sem depender de uma nova leitura do servidor.
+ * Isso evita perder a comparação caso o usuário troque de página logo depois de salvar.
  */
 function buildPublicRowsAfterUserReplacement(
   previousPublicRows,
@@ -2371,8 +2371,8 @@ function buildPublicRowsAfterUserReplacement(
 }
 
 /**
- * Monta a comparacao detalhada entre a contagem anterior e a atual.
- * O foco e listar apenas os itens que perderam caixas (saida > 0).
+ * Monta a comparação detalhada entre a contagem anterior e a atual.
+ * O foco é listar apenas os itens que perderam caixas (saída > 0).
  */
 function buildComparisonReport(previousRows, currentRows) {
   const previousAggregated = aggregateRows(previousRows);
@@ -2475,7 +2475,7 @@ function renderComparisonReport() {
   elements.comparisonBody.innerHTML = "";
 
   if (!report) {
-    elements.comparisonMeta.textContent = "Ainda nao existe comparacao salva.";
+    elements.comparisonMeta.textContent = "Ainda não existe comparação salva.";
     const empty = document.createElement("p");
     empty.className = "msg info";
     empty.textContent =
@@ -2492,7 +2492,7 @@ function renderComparisonReport() {
   if (!report.items?.length) {
     const empty = document.createElement("p");
     empty.className = "msg success";
-    empty.textContent = "Nenhuma saida encontrada na ultima comparacao.";
+    empty.textContent = "Nenhuma saída encontrada na última comparação.";
     elements.comparisonBody.appendChild(empty);
     return;
   }
@@ -5141,7 +5141,7 @@ function setupVoice() {
     if (elements.voiceLast) {
       elements.voiceLast.value = "";
     }
-    elements.voiceBtn.textContent = "Parar";
+    elements.voiceBtn.textContent = "Parar escuta";
     if (elements.voiceCard) {
       elements.voiceCard.classList.add("listening");
     }
@@ -5209,8 +5209,8 @@ function setupVoice() {
 }
 
 /*
-  ===== Exportacao e impressao =====
-  Compartilhado pelas tabelas de estoque publico e de contagem.
+  ===== Exportação e impressão =====
+  Compartilhado pelas tabelas de estoque público e de contagem.
 */
 
 function exportRows(rows, filename) {
@@ -5410,8 +5410,8 @@ function closeExportSheet(scope) {
 }
 
 /*
-  ===== Edicao, autenticacao visual e agregacao da sessao =====
-  Aqui ficam o modal de edicao, a troca entre login/painel e a soma local da nova contagem.
+  ===== Edição, autenticação visual e agregação da sessão =====
+  Aqui ficam o modal de edição, a troca entre login/painel e a soma local da nova contagem.
 */
 
 function showAuthPanel() {
@@ -6145,9 +6145,9 @@ function setCountMode(mode) {
 
 /**
  * Finaliza a nova contagem:
- * - substitui os registros antigos do usuario;
+ * - substitui os registros antigos do usuário;
  * - salva snapshot do dashboard;
- * - registra a comparacao detalhada da ultima contagem.
+ * - registra a comparação detalhada da última contagem.
  */
 async function saveNewCount() {
   if (!state.user) {
@@ -6286,7 +6286,7 @@ function discardNewCount() {
 }
 
 /*
-  ===== Formulario manual, selects dependentes e filtros =====
+  ===== Formulário manual, selects dependentes e filtros =====
   Este bloco controla os campos em cascata (setor > produto > marca > tipo).
 */
 
@@ -6795,7 +6795,7 @@ function setupEvents() {
       }
       const row = findCurrentRowByKey(state.selectedRowKey);
       if (!row) {
-        window.alert("Item selecionado nao encontrado.");
+        window.alert("Item selecionado não encontrado.");
         return;
       }
       openEditModal(row);
@@ -7099,7 +7099,7 @@ function setupEvents() {
     elements.countClearBtn.addEventListener("click", async () => {
       if (state.countMode === "new") {
         const confirmClear = window.confirm(
-          "Deseja limpar a nova contagem inteira? Isso vai zerar todos os setores que voce ja contou."
+          "Deseja limpar a nova contagem inteira? Isso vai zerar todos os setores que você já contou."
         );
         if (!confirmClear) return;
         state.sessionRows = [];
@@ -7118,7 +7118,7 @@ function setupEvents() {
       if (!confirmClear) return;
 
       const shouldSave = window.confirm(
-        "Salvar o total atual no historico antes de iniciar a nova contagem?\nOK = salvar e iniciar\nCancelar = iniciar sem salvar"
+        "Salvar o total atual no histórico antes de iniciar a nova contagem?\nOK = salvar e iniciar\nCancelar = iniciar sem salvar"
       );
       if (shouldSave) {
         const saved = await saveSnapshotRecord({
@@ -7130,7 +7130,7 @@ function setupEvents() {
         });
         if (!saved) {
           const proceed = window.confirm(
-            "Falha ao salvar o historico. Deseja iniciar a nova contagem mesmo assim?"
+            "Falha ao salvar o histórico. Deseja iniciar a nova contagem mesmo assim?"
           );
           if (!proceed) return;
         }
@@ -7148,8 +7148,8 @@ function setupEvents() {
       pushMessage(
         "success",
         shouldSave
-          ? "Nova contagem iniciada do zero. Estoque anterior salvo e guardado temporariamente para comparacao."
-          : "Nova contagem iniciada do zero. Estoque anterior guardado temporariamente para comparacao."
+          ? "Nova contagem iniciada do zero. Estoque anterior salvo e guardado temporariamente para comparação."
+          : "Nova contagem iniciada do zero. Estoque anterior guardado temporariamente para comparação."
       );
     });
   }
@@ -7270,7 +7270,7 @@ function setupAuth() {
   });
 }
 
-// Inicializa os selects base de setor usados no contexto e no modal de edicao.
+// Inicializa os selects base de setor usados no contexto e no modal de edição.
 function initSetorSelects() {
   const setores = Object.keys(CONFIG_GERAL);
   if (elements.setorSelect) {
