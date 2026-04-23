@@ -5165,86 +5165,50 @@ function setupVoice() {
   recognition.lang = "pt-BR";
   recognition.interimResults = true;
   recognition.maxAlternatives = 1;
-  recognition.continuous = false;
+  recognition.continuous = true;
 
   let listening = false;
   let shouldListen = false;
-  let lastRawNumericTranscript = "";
-  let lastRawNumericTranscriptAt = 0;
-  let lastInterimNumericTranscript = "";
-  let lastInterimNumericTranscriptAt = 0;
+  let clearVoiceLastOnNextStart = false;
+  const RESTART_DELAY_MS = 140;
 
-  const DIGIT_SEQUENCE_RE = /^\d+$/;
-  const DIGIT_TRANSCRIPT_TIMEOUT_MS = 3500;
-  const INTERIM_DIGIT_SPLIT_PAUSE_MS = 600;
-
-  function resetNumericTranscriptMemory() {
-    lastRawNumericTranscript = "";
-    lastRawNumericTranscriptAt = 0;
-    lastInterimNumericTranscript = "";
-    lastInterimNumericTranscriptAt = 0;
-  }
-
-  function extractDigitSequence(text) {
-    const normalized = normalizeText(text).replace(/\s+/g, "");
-    return DIGIT_SEQUENCE_RE.test(normalized) ? normalized : "";
-  }
-
-  function addTrailingCommaToNumbers(text) {
-    return String(text || "").replace(/\b(\d+)\b,?/g, "$1,");
-  }
-
-  function getStableFinalTranscript(rawTranscript) {
-    const cleaned = String(rawTranscript || "").trim();
-    if (!cleaned) return "";
-
-    const now = Date.now();
-    const currentDigits = extractDigitSequence(cleaned);
-    const isSingleNumericToken = Boolean(currentDigits);
-
-    if (isSingleNumericToken) {
-      const previousDigits = lastRawNumericTranscript;
-      const interimDigits = lastInterimNumericTranscript;
-      const interimDigitsAt = lastInterimNumericTranscriptAt;
-      const canUsePrevious =
-        previousDigits &&
-        now - lastRawNumericTranscriptAt <= DIGIT_TRANSCRIPT_TIMEOUT_MS &&
-        currentDigits.startsWith(previousDigits) &&
-        currentDigits.length > previousDigits.length;
-      const canSplitByInterimPause =
-        !previousDigits &&
-        interimDigits &&
-        now - interimDigitsAt >= INTERIM_DIGIT_SPLIT_PAUSE_MS &&
-        now - interimDigitsAt <= DIGIT_TRANSCRIPT_TIMEOUT_MS &&
-        currentDigits.startsWith(interimDigits) &&
-        currentDigits.length > interimDigits.length;
-
-      lastRawNumericTranscript = currentDigits;
-      lastRawNumericTranscriptAt = now;
-      lastInterimNumericTranscript = "";
-      lastInterimNumericTranscriptAt = 0;
-
-      if (canUsePrevious) {
-        const appendedDigits = currentDigits.slice(previousDigits.length);
-        return appendedDigits || "";
+  function setVoiceListeningUi(active) {
+    if (active) {
+      if (elements.voiceStatus) {
+        elements.voiceStatus.textContent = "Ouvindo...";
       }
-      if (canSplitByInterimPause) {
-        const appendedDigits = currentDigits.slice(interimDigits.length);
-        return appendedDigits
-          ? `${interimDigits} ${appendedDigits}`
-          : interimDigits;
+      elements.voiceBtn.textContent = "Parar escuta";
+      if (elements.voiceCard) {
+        elements.voiceCard.classList.add("listening");
       }
-      return cleaned;
+      return;
     }
 
-    resetNumericTranscriptMemory();
-    return cleaned;
+    if (elements.voiceStatus) {
+      elements.voiceStatus.textContent = "Parado.";
+    }
+    elements.voiceBtn.textContent = "Iniciar escuta";
+    if (elements.voiceCard) {
+      elements.voiceCard.classList.remove("listening");
+    }
+  }
+
+  function normalizeVoiceText(rawText) {
+    const tokens = normalizeText(rawText).split(" ").filter(Boolean);
+    if (!tokens.length) return "";
+    return tokens
+      .map((token) =>
+        Object.prototype.hasOwnProperty.call(NUMBER_WORDS, token)
+          ? String(NUMBER_WORDS[token])
+          : token
+      )
+      .join(" ");
   }
 
   elements.voiceBtn.addEventListener("click", () => {
     if (!requireAuthenticatedUser("Faça login para iniciar a escuta por voz.")) {
       shouldListen = false;
-      resetNumericTranscriptMemory();
+      setVoiceListeningUi(false);
       if (elements.voiceStatus) {
         elements.voiceStatus.textContent = "Faça login para iniciar a escuta.";
       }
@@ -5253,65 +5217,74 @@ function setupVoice() {
 
     if (!shouldListen) {
       shouldListen = true;
-      resetNumericTranscriptMemory();
-      recognition.start();
+      clearVoiceLastOnNextStart = true;
+      if (!listening) {
+        try {
+          recognition.start();
+        } catch (error) {
+          // Ignora erro de start duplicado em navegadores mais sensiveis.
+        }
+      }
       return;
     }
+
     shouldListen = false;
-    resetNumericTranscriptMemory();
-    recognition.stop();
+    if (listening) {
+      recognition.stop();
+    } else {
+      setVoiceListeningUi(false);
+    }
   });
 
   recognition.onstart = () => {
     listening = true;
-    if (elements.voiceStatus) {
-      elements.voiceStatus.textContent = "Ouvindo...";
-    }
-    if (elements.voiceLast) {
+    if (clearVoiceLastOnNextStart && elements.voiceLast) {
       elements.voiceLast.value = "";
     }
-    elements.voiceBtn.textContent = "Parar escuta";
-    if (elements.voiceCard) {
-      elements.voiceCard.classList.add("listening");
-    }
+    clearVoiceLastOnNextStart = false;
+    setVoiceListeningUi(true);
   };
 
   recognition.onend = () => {
     listening = false;
-    if (!shouldListen) {
-      resetNumericTranscriptMemory();
-    }
-    if (elements.voiceStatus) {
-      elements.voiceStatus.textContent = "Parado.";
-    }
-    elements.voiceBtn.textContent = "Iniciar escuta";
-    if (elements.voiceCard) {
-      elements.voiceCard.classList.remove("listening");
-    }
     if (shouldListen) {
       setTimeout(() => {
+        if (!shouldListen || listening) return;
         try {
           recognition.start();
         } catch (error) {
           // Ignora se o navegador ainda estiver finalizando a sessao anterior.
         }
-      }, 200);
+      }, RESTART_DELAY_MS);
+      return;
     }
+
+    setVoiceListeningUi(false);
   };
 
   recognition.onerror = (event) => {
+    if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+      shouldListen = false;
+      setVoiceListeningUi(false);
+      elements.voiceBtn.textContent = "Sem permissao";
+      elements.voiceBtn.disabled = true;
+      if (elements.voiceStatus) {
+        elements.voiceStatus.textContent = "Sem permissao para usar o microfone.";
+      }
+      return;
+    }
+
+    if (shouldListen) {
+      if (elements.voiceStatus) {
+        elements.voiceStatus.textContent = "Reconectando microfone...";
+      }
+      return;
+    }
+
     if (elements.voiceStatus) {
       elements.voiceStatus.textContent = `Erro: ${event.error}`;
     }
-    if (elements.voiceCard) {
-      elements.voiceCard.classList.remove("listening");
-    }
-    if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-      shouldListen = false;
-      resetNumericTranscriptMemory();
-      elements.voiceBtn.textContent = "Sem permissao";
-      elements.voiceBtn.disabled = true;
-    }
+    setVoiceListeningUi(false);
   };
 
   recognition.onresult = (event) => {
@@ -5334,27 +5307,22 @@ function setupVoice() {
       }
     }
 
-    const interimDigits = extractDigitSequence(interimTranscript);
-    if (interimDigits && interimDigits !== lastInterimNumericTranscript) {
-      lastInterimNumericTranscript = interimDigits;
-      lastInterimNumericTranscriptAt = Date.now();
-    }
-
-    const stableFinalTranscript = getStableFinalTranscript(finalTranscript);
-    const formattedFinalTranscript = addTrailingCommaToNumbers(
-      stableFinalTranscript
-    ).trim();
+    const normalizedFinalTranscript = normalizeVoiceText(finalTranscript);
+    const normalizedInterimTranscript = normalizeVoiceText(interimTranscript);
     const displayText = (
-      formattedFinalTranscript || addTrailingCommaToNumbers(interimTranscript)
+      normalizedFinalTranscript || normalizedInterimTranscript
     ).trim();
+
     if (elements.voiceLast) {
       elements.voiceLast.value = displayText;
     }
+
     if (elements.commandInput) {
       elements.commandInput.value = displayText;
     }
-    if (formattedFinalTranscript) {
-      processCommand(formattedFinalTranscript);
+
+    if (normalizedFinalTranscript) {
+      processCommand(normalizedFinalTranscript);
     }
   };
 }

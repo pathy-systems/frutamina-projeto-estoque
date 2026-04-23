@@ -7,8 +7,8 @@
   - atualizar o cache automaticamente quando a versao muda.
 */
 
-const STATIC_CACHE = "frutamina-static-v32";
-const RUNTIME_CACHE = "frutamina-runtime-v32";
+const STATIC_CACHE = "frutamina-static-v35";
+const RUNTIME_CACHE = "frutamina-runtime-v35";
 
 const APP_SHELL = [
   "./",
@@ -18,7 +18,7 @@ const APP_SHELL = [
   "./visao-geral.html",
   "./manifest.webmanifest",
   "./styles.css?v=20260423-7",
-  "./assets/app.js?v=20260423-8",
+  "./assets/app.js?v=20260423-11",
   "./assets/img/logo.webp",
   "./assets/img/capa.png",
   "./assets/img/icon-192.png",

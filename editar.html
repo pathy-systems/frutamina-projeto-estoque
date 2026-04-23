@@ -24,7 +24,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
   <body data-page="edit">
-    <aside id="app-sidebar" class="sidebar" aria-label="Navega��o principal">
+    <aside id="app-sidebar" class="sidebar" aria-label="Navegação principal">
       <div class="sidebar-top">
         <img src="assets/img/logo.webp" alt="Frutamina" class="sidebar-logo" />
       </div>
@@ -35,7 +35,7 @@
         </button>
         <button id="menu-dashboard" class="ghost" data-href="visao-geral.html" type="button">
           <i class="bi bi-bar-chart-line"></i>
-          <span class="sidebar-label">Vis�o geral</span>
+          <span class="sidebar-label">Visão geral</span>
         </button>
         <button id="menu-count" class="primary" type="button">
           <i class="bi bi-pencil-square"></i>
@@ -58,7 +58,7 @@
           <span id="theme-toggle-label" class="sidebar-label">Tema escuro</span>
         </button>
         <div id="menu-user" class="user-chip hidden">
-          <span>Usu�rio</span>
+          <span>Usuario</span>
           <strong id="menu-user-email">--</strong>
         </div>
         <button id="menu-logout" class="ghost hidden" type="button">
@@ -105,7 +105,7 @@
       <section id="auth-panel" class="card">
         <div class="card-header">
           <h2>Acesso</h2>
-          <p>Entre com seu usu�rio do CD para come�ar a contagem.</p>
+          <p>Entre com seu usuario do CD para comecar a contagem.</p>
         </div>
         <div class="form-grid">
           <label for="email">Usuario</label>
@@ -182,6 +182,8 @@
               placeholder="O que a maquina esta ouvindo..."
             ></textarea>
 
+          
+            <div id="messages" class="msg-area"></div>
           </section>
 
           <!-- Lancamento manual por tabela (setor, produto, marca, tipo e quantidade). -->
@@ -200,7 +202,7 @@
                     <th><span id="manual-label-tipo">Tipo</span></th>
                     <th><span id="manual-label-qty">Pallets</span></th>
                     <th>Caixas avulsas</th>
-                    <th>A��o</th>
+                    <th>Ação</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -238,7 +240,6 @@
                 </tbody>
               </table>
             </div>
-            <div id="messages" class="msg-area"></div>
           </section>
           
           </div>
@@ -392,7 +393,7 @@
       </div>
     </div>
 
-    <script src="assets/app.js?v=20260423-7"></script>
+    <script src="assets/app.js?v=20260423-11"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
