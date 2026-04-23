@@ -5165,7 +5165,7 @@ function setupVoice() {
   recognition.lang = "pt-BR";
   recognition.interimResults = true;
   recognition.maxAlternatives = 1;
-  recognition.continuous = true;
+  recognition.continuous = false;
 
   let listening = false;
   let shouldListen = false;
