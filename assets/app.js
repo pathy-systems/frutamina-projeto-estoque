@@ -5239,14 +5239,20 @@ function setupVoice() {
   recognition.onresult = (event) => {
     let interimTranscript = "";
     let finalTranscript = "";
+    const appendSpeechChunk = (current, chunk) => {
+      const normalizedChunk = String(chunk || "").trim();
+      if (!normalizedChunk) return current;
+      if (!current) return normalizedChunk;
+      return `${current} ${normalizedChunk}`;
+    };
 
     for (let i = event.resultIndex; i < event.results.length; i += 1) {
       const result = event.results[i];
       const text = result[0]?.transcript || "";
       if (result.isFinal) {
-        finalTranscript += text;
+        finalTranscript = appendSpeechChunk(finalTranscript, text);
       } else {
-        interimTranscript += text;
+        interimTranscript = appendSpeechChunk(interimTranscript, text);
       }
     }
 
