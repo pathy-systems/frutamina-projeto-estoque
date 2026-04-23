@@ -5197,11 +5197,15 @@ function setupVoice() {
     const tokens = normalizeText(rawText).split(" ").filter(Boolean);
     if (!tokens.length) return "";
     return tokens
-      .map((token) =>
-        Object.prototype.hasOwnProperty.call(NUMBER_WORDS, token)
-          ? String(NUMBER_WORDS[token])
-          : token
-      )
+      .map((token) => {
+        if (Object.prototype.hasOwnProperty.call(NUMBER_WORDS, token)) {
+          return `${NUMBER_WORDS[token]},`;
+        }
+        if (/^\d+$/.test(token)) {
+          return `${token},`;
+        }
+        return token;
+      })
       .join(" ");
   }
 
