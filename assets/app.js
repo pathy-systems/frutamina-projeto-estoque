@@ -5171,13 +5171,23 @@ function setupVoice() {
   let shouldListen = false;
   let lastRawNumericTranscript = "";
   let lastRawNumericTranscriptAt = 0;
+  let lastInterimNumericTranscript = "";
+  let lastInterimNumericTranscriptAt = 0;
 
   const DIGIT_SEQUENCE_RE = /^\d+$/;
   const DIGIT_TRANSCRIPT_TIMEOUT_MS = 3500;
+  const INTERIM_DIGIT_SPLIT_PAUSE_MS = 600;
 
   function resetNumericTranscriptMemory() {
     lastRawNumericTranscript = "";
     lastRawNumericTranscriptAt = 0;
+    lastInterimNumericTranscript = "";
+    lastInterimNumericTranscriptAt = 0;
+  }
+
+  function extractDigitSequence(text) {
+    const normalized = normalizeText(text).replace(/\s+/g, "");
+    return DIGIT_SEQUENCE_RE.test(normalized) ? normalized : "";
   }
 
   function addTrailingCommaToNumbers(text) {
@@ -5189,24 +5199,40 @@ function setupVoice() {
     if (!cleaned) return "";
 
     const now = Date.now();
-    const normalized = normalizeText(cleaned);
-    const isSingleNumericToken = DIGIT_SEQUENCE_RE.test(normalized);
+    const currentDigits = extractDigitSequence(cleaned);
+    const isSingleNumericToken = Boolean(currentDigits);
 
     if (isSingleNumericToken) {
-      const currentDigits = normalized;
       const previousDigits = lastRawNumericTranscript;
+      const interimDigits = lastInterimNumericTranscript;
+      const interimDigitsAt = lastInterimNumericTranscriptAt;
       const canUsePrevious =
         previousDigits &&
         now - lastRawNumericTranscriptAt <= DIGIT_TRANSCRIPT_TIMEOUT_MS &&
         currentDigits.startsWith(previousDigits) &&
         currentDigits.length > previousDigits.length;
+      const canSplitByInterimPause =
+        !previousDigits &&
+        interimDigits &&
+        now - interimDigitsAt >= INTERIM_DIGIT_SPLIT_PAUSE_MS &&
+        now - interimDigitsAt <= DIGIT_TRANSCRIPT_TIMEOUT_MS &&
+        currentDigits.startsWith(interimDigits) &&
+        currentDigits.length > interimDigits.length;
 
       lastRawNumericTranscript = currentDigits;
       lastRawNumericTranscriptAt = now;
+      lastInterimNumericTranscript = "";
+      lastInterimNumericTranscriptAt = 0;
 
       if (canUsePrevious) {
         const appendedDigits = currentDigits.slice(previousDigits.length);
         return appendedDigits || "";
+      }
+      if (canSplitByInterimPause) {
+        const appendedDigits = currentDigits.slice(interimDigits.length);
+        return appendedDigits
+          ? `${interimDigits} ${appendedDigits}`
+          : interimDigits;
       }
       return cleaned;
     }
@@ -5306,6 +5332,12 @@ function setupVoice() {
       } else {
         interimTranscript = appendSpeechChunk(interimTranscript, text);
       }
+    }
+
+    const interimDigits = extractDigitSequence(interimTranscript);
+    if (interimDigits && interimDigits !== lastInterimNumericTranscript) {
+      lastInterimNumericTranscript = interimDigits;
+      lastInterimNumericTranscriptAt = Date.now();
     }
 
     const stableFinalTranscript = getStableFinalTranscript(finalTranscript);

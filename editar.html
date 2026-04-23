@@ -24,7 +24,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
   <body data-page="edit">
-    <aside id="app-sidebar" class="sidebar" aria-label="Navegação principal">
+    <aside id="app-sidebar" class="sidebar" aria-label="Navegaï¿½ï¿½o principal">
       <div class="sidebar-top">
         <img src="assets/img/logo.webp" alt="Frutamina" class="sidebar-logo" />
       </div>
@@ -35,7 +35,7 @@
         </button>
         <button id="menu-dashboard" class="ghost" data-href="visao-geral.html" type="button">
           <i class="bi bi-bar-chart-line"></i>
-          <span class="sidebar-label">Visão geral</span>
+          <span class="sidebar-label">Visï¿½o geral</span>
         </button>
         <button id="menu-count" class="primary" type="button">
           <i class="bi bi-pencil-square"></i>
@@ -58,7 +58,7 @@
           <span id="theme-toggle-label" class="sidebar-label">Tema escuro</span>
         </button>
         <div id="menu-user" class="user-chip hidden">
-          <span>Usuário</span>
+          <span>Usuï¿½rio</span>
           <strong id="menu-user-email">--</strong>
         </div>
         <button id="menu-logout" class="ghost hidden" type="button">
@@ -105,7 +105,7 @@
       <section id="auth-panel" class="card">
         <div class="card-header">
           <h2>Acesso</h2>
-          <p>Entre com seu usuário do CD para começar a contagem.</p>
+          <p>Entre com seu usuï¿½rio do CD para comeï¿½ar a contagem.</p>
         </div>
         <div class="form-grid">
           <label for="email">Usuario</label>
@@ -153,6 +153,7 @@
         </section>
         <div class="grid count-layout">
           <div class="count-left-column">
+            
           <!-- Card de voz com contexto travado, escuta e comando manual. -->
           <section class="card voice-card" id="voice-card">
             <div class="voice-card-header">
@@ -181,27 +182,6 @@
               placeholder="O que a maquina esta ouvindo..."
             ></textarea>
 
-            <div class="voice-manual-area">
-              <p class="voice-manual-title">Comando manual de voz</p>
-              <div class="voice-command-row">
-                <input
-                  id="command-input"
-                  type="text"
-                  placeholder="ex: CAMARA FRIA, ANGEL, 4"
-                  autocomplete="off"
-                />
-                <button id="process-btn" class="ghost" type="button">Processar</button>
-              </div>
-              <div class="voice-context-actions">
-                <label class="voice-sector-button" for="setor-select">
-                  Alterar setor
-                  <select id="setor-select" aria-label="Alterar setor"></select>
-                </label>
-                <button id="clear-context" class="ghost clear-context-btn" type="button">
-                  Limpar contexto
-                </button>
-              </div>
-            </div>
           </section>
 
           <!-- Lancamento manual por tabela (setor, produto, marca, tipo e quantidade). -->
@@ -220,7 +200,7 @@
                     <th><span id="manual-label-tipo">Tipo</span></th>
                     <th><span id="manual-label-qty">Pallets</span></th>
                     <th>Caixas avulsas</th>
-                    <th>Ação</th>
+                    <th>Aï¿½ï¿½o</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -260,13 +240,14 @@
             </div>
             <div id="messages" class="msg-area"></div>
           </section>
+          
           </div>
           <div class="count-right-column">
           <!-- Tabela dos itens contados no setor atual, com edicao e remocao. -->
           <section id="count-items-card" class="card full">
             <div class="card-header">
               <h2>Itens Contados</h2>
-              <p>Visualização por setor atual.</p>
+              <p>VisualizaÃ§Ã£o por setor atual.</p>
             </div>
             <div class="card-actions">
               <button id="edit-item-btn" class="ghost">Editar item</button>
@@ -294,7 +275,7 @@
               </div>
             </div>
             <div class="last-update">
-              Última atualização: <strong id="count-last-update">--</strong>
+              Ãšltima atualizaÃ§Ã£o: <strong id="count-last-update">--</strong>
             </div>
             <div class="actions table-tools">
               <button id="count-export-toggle" class="ghost">Exportar</button>
@@ -312,7 +293,7 @@
                       <th>Pallets</th>
                       <th>Caixas avulsas</th>
                       <th>Total Caixas</th>
-                      <th>Ações</th>
+                      <th>AÃ§Ãµes</th>
                     </tr>
                   </thead>
                   <tbody id="count-table-body"></tbody>
@@ -351,7 +332,7 @@
           </button>
           <button id="count-export-print" class="share-option" type="button">
             <i class="bi bi-printer"></i>
-            <span>Impressão</span>
+            <span>ImpressÃ£o</span>
           </button>
         </div>
       </div>
@@ -391,7 +372,7 @@
           <button id="edit-save" class="primary">Salvar</button>
         </div>
         <div class="debug-card hidden" id="debug-panel">
-          <h4>Diagnóstico</h4>
+          <h4>DiagnÃ³stico</h4>
           <div class="debug-row">
             <strong>URL:</strong> <span id="debug-url">--</span>
           </div>
@@ -423,5 +404,3 @@
     </script>
   </body>
 </html>
-
-
