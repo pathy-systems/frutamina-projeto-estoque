@@ -5175,17 +5175,13 @@ function setupVoice() {
   const DIGIT_SEQUENCE_RE = /^\d+$/;
   const DIGIT_TRANSCRIPT_TIMEOUT_MS = 3500;
 
-  function normalizeNumericTranscript(text) {
-    const normalized = normalizeText(text).replace(/\s+/g, "");
-    return DIGIT_SEQUENCE_RE.test(normalized) ? normalized : "";
+  function resetNumericTranscriptMemory() {
+    lastRawNumericTranscript = "";
+    lastRawNumericTranscriptAt = 0;
   }
 
-  function splitDigits(text) {
-    return String(text || "")
-      .trim()
-      .split("")
-      .filter(Boolean)
-      .join(" ");
+  function addTrailingCommaToNumbers(text) {
+    return String(text || "").replace(/\b(\d+)\b,?/g, "$1,");
   }
 
   function getStableFinalTranscript(rawTranscript) {
@@ -5193,9 +5189,11 @@ function setupVoice() {
     if (!cleaned) return "";
 
     const now = Date.now();
-    const currentDigits = normalizeNumericTranscript(cleaned);
+    const normalized = normalizeText(cleaned);
+    const isSingleNumericToken = DIGIT_SEQUENCE_RE.test(normalized);
 
-    if (currentDigits) {
+    if (isSingleNumericToken) {
+      const currentDigits = normalized;
       const previousDigits = lastRawNumericTranscript;
       const canUsePrevious =
         previousDigits &&
@@ -5203,25 +5201,24 @@ function setupVoice() {
         currentDigits.startsWith(previousDigits) &&
         currentDigits.length > previousDigits.length;
 
-      if (canUsePrevious) {
-        const appendedDigits = currentDigits.slice(previousDigits.length);
-        lastRawNumericTranscript = currentDigits;
-        lastRawNumericTranscriptAt = now;
-        return appendedDigits ? splitDigits(appendedDigits) : "";
-      }
       lastRawNumericTranscript = currentDigits;
       lastRawNumericTranscriptAt = now;
+
+      if (canUsePrevious) {
+        const appendedDigits = currentDigits.slice(previousDigits.length);
+        return appendedDigits || "";
+      }
       return cleaned;
     }
 
-    lastRawNumericTranscript = "";
-    lastRawNumericTranscriptAt = 0;
+    resetNumericTranscriptMemory();
     return cleaned;
   }
 
   elements.voiceBtn.addEventListener("click", () => {
     if (!requireAuthenticatedUser("Faça login para iniciar a escuta por voz.")) {
       shouldListen = false;
+      resetNumericTranscriptMemory();
       if (elements.voiceStatus) {
         elements.voiceStatus.textContent = "Faça login para iniciar a escuta.";
       }
@@ -5230,17 +5227,17 @@ function setupVoice() {
 
     if (!shouldListen) {
       shouldListen = true;
+      resetNumericTranscriptMemory();
       recognition.start();
       return;
     }
     shouldListen = false;
+    resetNumericTranscriptMemory();
     recognition.stop();
   });
 
   recognition.onstart = () => {
     listening = true;
-    lastRawNumericTranscript = "";
-    lastRawNumericTranscriptAt = 0;
     if (elements.voiceStatus) {
       elements.voiceStatus.textContent = "Ouvindo...";
     }
@@ -5255,8 +5252,9 @@ function setupVoice() {
 
   recognition.onend = () => {
     listening = false;
-    lastRawNumericTranscript = "";
-    lastRawNumericTranscriptAt = 0;
+    if (!shouldListen) {
+      resetNumericTranscriptMemory();
+    }
     if (elements.voiceStatus) {
       elements.voiceStatus.textContent = "Parado.";
     }
@@ -5276,8 +5274,6 @@ function setupVoice() {
   };
 
   recognition.onerror = (event) => {
-    lastRawNumericTranscript = "";
-    lastRawNumericTranscriptAt = 0;
     if (elements.voiceStatus) {
       elements.voiceStatus.textContent = `Erro: ${event.error}`;
     }
@@ -5286,6 +5282,7 @@ function setupVoice() {
     }
     if (event.error === "not-allowed" || event.error === "service-not-allowed") {
       shouldListen = false;
+      resetNumericTranscriptMemory();
       elements.voiceBtn.textContent = "Sem permissao";
       elements.voiceBtn.disabled = true;
     }
@@ -5312,15 +5309,20 @@ function setupVoice() {
     }
 
     const stableFinalTranscript = getStableFinalTranscript(finalTranscript);
-    const displayText = (stableFinalTranscript || interimTranscript).trim();
+    const formattedFinalTranscript = addTrailingCommaToNumbers(
+      stableFinalTranscript
+    ).trim();
+    const displayText = (
+      formattedFinalTranscript || addTrailingCommaToNumbers(interimTranscript)
+    ).trim();
     if (elements.voiceLast) {
       elements.voiceLast.value = displayText;
     }
     if (elements.commandInput) {
       elements.commandInput.value = displayText;
     }
-    if (stableFinalTranscript.trim()) {
-      processCommand(stableFinalTranscript.trim());
+    if (formattedFinalTranscript) {
+      processCommand(formattedFinalTranscript);
     }
   };
 }
