@@ -5169,6 +5169,55 @@ function setupVoice() {
 
   let listening = false;
   let shouldListen = false;
+  let lastRawNumericTranscript = "";
+  let lastRawNumericTranscriptAt = 0;
+
+  const DIGIT_SEQUENCE_RE = /^\d+$/;
+  const DIGIT_TRANSCRIPT_TIMEOUT_MS = 3500;
+
+  function normalizeNumericTranscript(text) {
+    const normalized = normalizeText(text).replace(/\s+/g, "");
+    return DIGIT_SEQUENCE_RE.test(normalized) ? normalized : "";
+  }
+
+  function splitDigits(text) {
+    return String(text || "")
+      .trim()
+      .split("")
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  function getStableFinalTranscript(rawTranscript) {
+    const cleaned = String(rawTranscript || "").trim();
+    if (!cleaned) return "";
+
+    const now = Date.now();
+    const currentDigits = normalizeNumericTranscript(cleaned);
+
+    if (currentDigits) {
+      const previousDigits = lastRawNumericTranscript;
+      const canUsePrevious =
+        previousDigits &&
+        now - lastRawNumericTranscriptAt <= DIGIT_TRANSCRIPT_TIMEOUT_MS &&
+        currentDigits.startsWith(previousDigits) &&
+        currentDigits.length > previousDigits.length;
+
+      if (canUsePrevious) {
+        const appendedDigits = currentDigits.slice(previousDigits.length);
+        lastRawNumericTranscript = currentDigits;
+        lastRawNumericTranscriptAt = now;
+        return appendedDigits ? splitDigits(appendedDigits) : "";
+      }
+      lastRawNumericTranscript = currentDigits;
+      lastRawNumericTranscriptAt = now;
+      return cleaned;
+    }
+
+    lastRawNumericTranscript = "";
+    lastRawNumericTranscriptAt = 0;
+    return cleaned;
+  }
 
   elements.voiceBtn.addEventListener("click", () => {
     if (!requireAuthenticatedUser("Faça login para iniciar a escuta por voz.")) {
@@ -5190,6 +5239,8 @@ function setupVoice() {
 
   recognition.onstart = () => {
     listening = true;
+    lastRawNumericTranscript = "";
+    lastRawNumericTranscriptAt = 0;
     if (elements.voiceStatus) {
       elements.voiceStatus.textContent = "Ouvindo...";
     }
@@ -5204,6 +5255,8 @@ function setupVoice() {
 
   recognition.onend = () => {
     listening = false;
+    lastRawNumericTranscript = "";
+    lastRawNumericTranscriptAt = 0;
     if (elements.voiceStatus) {
       elements.voiceStatus.textContent = "Parado.";
     }
@@ -5223,6 +5276,8 @@ function setupVoice() {
   };
 
   recognition.onerror = (event) => {
+    lastRawNumericTranscript = "";
+    lastRawNumericTranscriptAt = 0;
     if (elements.voiceStatus) {
       elements.voiceStatus.textContent = `Erro: ${event.error}`;
     }
@@ -5256,15 +5311,16 @@ function setupVoice() {
       }
     }
 
-    const displayText = (finalTranscript || interimTranscript).trim();
+    const stableFinalTranscript = getStableFinalTranscript(finalTranscript);
+    const displayText = (stableFinalTranscript || interimTranscript).trim();
     if (elements.voiceLast) {
       elements.voiceLast.value = displayText;
     }
     if (elements.commandInput) {
       elements.commandInput.value = displayText;
     }
-    if (finalTranscript.trim()) {
-      processCommand(finalTranscript.trim());
+    if (stableFinalTranscript.trim()) {
+      processCommand(stableFinalTranscript.trim());
     }
   };
 }
