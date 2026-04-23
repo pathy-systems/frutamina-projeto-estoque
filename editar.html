@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
@@ -20,11 +20,10 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
     />
-    <link rel="stylesheet" href="styles.css?v=20260423-6" />
+    <link rel="stylesheet" href="styles.css?v=20260423-7" />
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
   <body data-page="edit">
-    <!-- Página operacional de contagem: login, voz, formulário manual e sincronização. -->
     <aside id="app-sidebar" class="sidebar" aria-label="Navegação principal">
       <div class="sidebar-top">
         <img src="assets/img/logo.webp" alt="Frutamina" class="sidebar-logo" />
@@ -93,7 +92,7 @@
           </button>
         </div>
       </header>
-      <!-- Cabeçalho visual da área de edição. -->
+      <!-- Cabecalho visual da area de edicao. -->
       <header class="hero">
         <div>
           <img src="assets/img/logo.webp" alt="logo" class="logo" />
@@ -106,7 +105,7 @@
       <section id="auth-panel" class="card">
         <div class="card-header">
           <h2>Acesso</h2>
-          <p>Entre com seu usuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio do CD para comeÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ar a contagem.</p>
+          <p>Entre com seu usuário do CD para começar a contagem.</p>
         </div>
         <div class="form-grid">
           <label for="email">Usuario</label>
@@ -221,7 +220,7 @@
                     <th><span id="manual-label-tipo">Tipo</span></th>
                     <th><span id="manual-label-qty">Pallets</span></th>
                     <th>Caixas avulsas</th>
-                    <th>AÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</th>
+                    <th>Ação</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -267,7 +266,7 @@
           <section id="count-items-card" class="card full">
             <div class="card-header">
               <h2>Itens Contados</h2>
-              <p>VisualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o por setor atual.</p>
+              <p>Visualização por setor atual.</p>
             </div>
             <div class="card-actions">
               <button id="edit-item-btn" class="ghost">Editar item</button>
@@ -295,7 +294,7 @@
               </div>
             </div>
             <div class="last-update">
-              ÃƒÆ’Ã†â€™Ãƒâ€¦Ã‚Â¡ltima atualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: <strong id="count-last-update">--</strong>
+              Última atualização: <strong id="count-last-update">--</strong>
             </div>
             <div class="actions table-tools">
               <button id="count-export-toggle" class="ghost">Exportar</button>
@@ -313,7 +312,7 @@
                       <th>Pallets</th>
                       <th>Caixas avulsas</th>
                       <th>Total Caixas</th>
-                      <th>AÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes</th>
+                      <th>Ações</th>
                     </tr>
                   </thead>
                   <tbody id="count-table-body"></tbody>
@@ -352,7 +351,7 @@
           </button>
           <button id="count-export-print" class="share-option" type="button">
             <i class="bi bi-printer"></i>
-            <span>ImpressÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</span>
+            <span>Impressão</span>
           </button>
         </div>
       </div>
@@ -392,7 +391,7 @@
           <button id="edit-save" class="primary">Salvar</button>
         </div>
         <div class="debug-card hidden" id="debug-panel">
-          <h4>DiagnÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³stico</h4>
+          <h4>Diagnóstico</h4>
           <div class="debug-row">
             <strong>URL:</strong> <span id="debug-url">--</span>
           </div>
@@ -412,7 +411,7 @@
       </div>
     </div>
 
-    <script src="assets/app.js?v=20260423-2"></script>
+    <script src="assets/app.js?v=20260423-3"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
@@ -424,3 +423,5 @@
     </script>
   </body>
 </html>
+
+

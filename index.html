@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
@@ -20,12 +20,12 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
     />
-    <link rel="stylesheet" href="styles.css?v=20260423-5" />
+    <link rel="stylesheet" href="styles.css?v=20260423-7" />
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
   <body data-page="view">
-    <!-- Página pública de estoque: consulta, filtro, exportação e impressão. -->
-    <aside id="app-sidebar" class="sidebar" aria-label="Navegação principal">
+    <!-- P?gina p?blica de estoque: consulta, filtro, exporta??o e impress?o. -->
+    <aside id="app-sidebar" class="sidebar" aria-label="Navega??o principal">
       <div class="sidebar-top">
         <img src="assets/img/logo.webp" alt="Frutamina" class="sidebar-logo" />
       </div>
@@ -36,7 +36,7 @@
         </button>
         <button id="menu-dashboard" class="ghost" data-href="visao-geral.html" type="button">
           <i class="bi bi-bar-chart-line"></i>
-          <span class="sidebar-label">Visão geral</span>
+          <span class="sidebar-label">Visao geral</span>
         </button>
         <button id="menu-count" class="ghost" data-href="editar.html" type="button">
           <i class="bi bi-pencil-square"></i>
@@ -59,7 +59,7 @@
           <span id="theme-toggle-label" class="sidebar-label">Tema escuro</span>
         </button>
         <div id="menu-user" class="user-chip hidden">
-          <span>Usuário</span>
+          <span>Usuario</span>
           <strong id="menu-user-email">--</strong>
         </div>
         <button id="menu-logout" class="ghost hidden" type="button">
@@ -93,7 +93,7 @@
           </button>
         </div>
       </header>
-      <!-- Cabeçalho visual da página. -->
+      <!-- Cabecalho visual da pagina. -->
       <header class="hero">
         <div>
           <img src="assets/img/logo.webp" alt="logo" class="logo" />
@@ -218,7 +218,7 @@
             </button>
             <button id="public-export-print" class="share-option" type="button">
               <i class="bi bi-printer"></i>
-              <span>ImpressÃƒÆ’Ã‚Â£o</span>
+              <span>Impressão</span>
             </button>
           </div>
         </div>
@@ -256,10 +256,10 @@
       <section id="auth-panel" class="card hidden">
         <div class="card-header">
           <h2>Acesso</h2>
-          <p>Entre com seu usuÃƒÆ’Ã‚Â¡rio do CD para comeÃƒÆ’Ã‚Â§ar a contagem.</p>
+          <p>Entre com seu usuário do CD para começar a contagem.</p>
         </div>
         <div class="form-grid">
-          <label for="email">UsuÃƒÆ’Ã‚Â¡rio ou nÃƒÆ’Ã‚Âºmero</label>
+          <label for="email">Usuário ou número</label>
           <input id="email" type="text" placeholder="Ex: 1234 ou JOAO" />
           <label for="password">Senha</label>
           <input id="password" type="password" placeholder="*******" />
@@ -276,7 +276,7 @@
           <section class="card">
             <div class="card-header">
               <h2>Contexto Travado</h2>
-              <p>Fale setor, marca/produto ou nÃƒÆ’Ã‚Âºmero.</p>
+              <p>Fale setor, marca/produto ou número.</p>
             </div>
             <div class="context">
               <div class="context-item">
@@ -311,7 +311,7 @@
                 id="voice-last"
                 rows="2"
                 readonly
-                placeholder="ÃƒÆ’Ã…Â¡ltimo comando reconhecido..."
+                placeholder="último comando reconhecido..."
               ></textarea>
             </div>
           </section>
@@ -319,13 +319,13 @@
           <section class="card full">
             <div class="card-header">
               <h2>Comando Manual</h2>
-              <p>TambÃƒÆ’Ã‚Â©m funciona digitando (ex: CHÃƒÆ’Ã†â€™O, ANGEL, 4).</p>
+              <p>Também funciona digitando (ex: CHÃO, ANGEL, 4).</p>
             </div>
             <div class="command">
               <input
                 id="command-input"
                 type="text"
-                placeholder="Diga o setor, produto/marca ou apenas o nÃƒÆ’Ã‚Âºmero"
+                placeholder="Diga o setor, produto/marca ou apenas o número"
               />
               <button id="process-btn" class="primary">Processar</button>
             </div>
@@ -335,7 +335,7 @@
           <section class="card full">
             <div class="card-header">
               <h2>Itens Contados</h2>
-              <p>VisualizaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o por setor atual.</p>
+              <p>Visualização por setor atual.</p>
             </div>
             <div class="table-wrap">
               <table>
@@ -366,7 +366,7 @@
         </div>
       </section>
     </div>
-    <script src="assets/app.js?v=20260423-1"></script>
+    <script src="assets/app.js?v=20260423-3"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
@@ -378,6 +378,8 @@
     </script>
   </body>
 </html>
+
+
 
 
 

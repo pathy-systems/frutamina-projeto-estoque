@@ -876,6 +876,33 @@ const elements = {
 };
 
 const PAGE_MODE = document.body?.dataset?.page || "view";
+const RESTRICTED_PAGE_MODES = new Set(["edit", "products"]);
+
+function isRestrictedPageMode() {
+  return RESTRICTED_PAGE_MODES.has(PAGE_MODE);
+}
+
+function lockRestrictedAccess(message = "") {
+  if (!isRestrictedPageMode()) return;
+  document.body.classList.add("auth-locked");
+  hideCountPanels();
+  showAuthPanel({ scroll: false });
+  if (message) {
+    setAuthMessage("warn", message);
+  }
+}
+
+function unlockRestrictedAccess() {
+  if (!isRestrictedPageMode()) return;
+  document.body.classList.remove("auth-locked");
+  setAuthMessage("", "");
+}
+
+function requireAuthenticatedUser(message = "Faça login para continuar.") {
+  if (state.user) return true;
+  lockRestrictedAccess(message);
+  return false;
+}
 
 /*
   ===== Regras de linguagem / voz =====
@@ -1690,6 +1717,10 @@ function refreshCatalogDependentUI() {
 }
 
 function removeCatalogEntryByKey(entryKey) {
+  if (!requireAuthenticatedUser("Faça login para alterar o cadastro de produtos.")) {
+    return;
+  }
+
   const parsed = parseCatalogEntryKey(entryKey);
   if (!parsed) {
     setCatalogMessage("error", "Produto invalido para remocao.");
@@ -1717,6 +1748,10 @@ function removeCatalogEntryByKey(entryKey) {
 }
 
 function addCatalogEntryFromForm() {
+  if (!requireAuthenticatedUser("Faça login para alterar o cadastro de produtos.")) {
+    return;
+  }
+
   if (
     !elements.catalogSetor ||
     !elements.catalogProduto ||
@@ -1768,6 +1803,10 @@ function addCatalogEntryFromForm() {
 }
 
 function resetCatalogOverridesToDefault() {
+  if (!requireAuthenticatedUser("Faça login para alterar o cadastro de produtos.")) {
+    return;
+  }
+
   if (!state.catalogAdditions.length && !state.catalogRemovals.length) {
     setCatalogMessage("info", "Catalogo ja esta no padrao original.");
     return;
@@ -4337,6 +4376,10 @@ async function registerInventoryChange({
   actionKind = "pallets",
   correctionMode = null,
 }) {
+  if (!requireAuthenticatedUser("Faça login para registrar itens.")) {
+    return null;
+  }
+
   const sourceRows =
     state.countMode === "new" ? state.sessionRows : state.userRows;
   const currentRow = getInventoryRowByIdentity(sourceRows, {
@@ -4632,6 +4675,10 @@ async function handlePendingCorrection(rawText) {
  * - gravacao do item no modo atual ou na nova contagem.
  */
 async function processCommand(rawText) {
+  if (!requireAuthenticatedUser("Faça login para usar comandos de voz.")) {
+    return;
+  }
+
   const tokens = tokenizeText(rawText);
   if (!tokens.length) return;
 
@@ -5124,6 +5171,14 @@ function setupVoice() {
   let shouldListen = false;
 
   elements.voiceBtn.addEventListener("click", () => {
+    if (!requireAuthenticatedUser("Faça login para iniciar a escuta por voz.")) {
+      shouldListen = false;
+      if (elements.voiceStatus) {
+        elements.voiceStatus.textContent = "Faça login para iniciar a escuta.";
+      }
+      return;
+    }
+
     if (!shouldListen) {
       shouldListen = true;
       recognition.start();
@@ -5414,16 +5469,22 @@ function closeExportSheet(scope) {
   Aqui ficam o modal de edição, a troca entre login/painel e a soma local da nova contagem.
 */
 
-function showAuthPanel() {
+function showAuthPanel(options = {}) {
+  const { scroll = true } = options;
   if (elements.authPanel) {
     elements.authPanel.classList.remove("hidden");
-    elements.authPanel.scrollIntoView({ behavior: "smooth" });
+    if (scroll) {
+      elements.authPanel.scrollIntoView({ behavior: "smooth" });
+    }
   }
   if (elements.countPanel) elements.countPanel.classList.add("hidden");
   if (elements.productsPanel) elements.productsPanel.classList.add("hidden");
 }
 
 function showCountPanel() {
+  if (!requireAuthenticatedUser("Faça login para acessar a edição de estoque.")) {
+    return;
+  }
   if (elements.authPanel) elements.authPanel.classList.add("hidden");
   if (elements.productsPanel) elements.productsPanel.classList.add("hidden");
   if (elements.countPanel) {
@@ -5434,6 +5495,9 @@ function showCountPanel() {
 }
 
 function showProductsPanel() {
+  if (!requireAuthenticatedUser("Faça login para acessar o cadastro de produtos.")) {
+    return;
+  }
   if (elements.authPanel) elements.authPanel.classList.add("hidden");
   if (elements.countPanel) elements.countPanel.classList.add("hidden");
   if (elements.productsPanel) {
@@ -5593,6 +5657,9 @@ function findCurrentRowByKey(key) {
 }
 
 function openEditModal(row = null) {
+  if (!requireAuthenticatedUser("Faça login para editar itens.")) {
+    return;
+  }
   if (!elements.editModal) return;
   state.editTarget = {
     rowKey: getRowKey(row),
@@ -5661,6 +5728,9 @@ function findSessionRowByKey(key) {
 }
 
 async function saveEditItem() {
+  if (!requireAuthenticatedUser("Faça login para salvar alterações.")) {
+    return;
+  }
   if (!elements.editSetor || !elements.editProduto || !elements.editMarca) return;
 
   setEditMessage("info", "Salvando...");
@@ -5880,6 +5950,9 @@ async function saveEditItem() {
 }
 
 async function removeRow(row) {
+  if (!requireAuthenticatedUser("Faça login para remover itens.")) {
+    return;
+  }
   const rowKey = getRowKey(row);
   if (!rowKey) return;
   const tipoLabel = formatTipoLabelValue(row?.produto, row?.tipo, row?.marca);
@@ -6036,6 +6109,11 @@ function setupTheme() {
 }
 
 function setEditSection(section) {
+  if (!state.user && isRestrictedPageMode()) {
+    lockRestrictedAccess("Faça login para acessar esta área.");
+    return;
+  }
+
   const nextSection = section === "products" ? "products" : "stock";
   state.editSection = nextSection;
   const isProducts = nextSection === "products";
@@ -6106,6 +6184,9 @@ function updateCountModeUI() {
 
 
 function setCountMode(mode) {
+  if (!requireAuthenticatedUser("Faça login para alternar o modo de contagem.")) {
+    return;
+  }
   if (mode === state.countMode) return;
   state.selectedRowKey = null;
   clearVoiceActionState();
@@ -6150,8 +6231,7 @@ function setCountMode(mode) {
  * - registra a comparação detalhada da última contagem.
  */
 async function saveNewCount() {
-  if (!state.user) {
-    pushMessage("warn", "Faça login para salvar a nova contagem.");
+  if (!requireAuthenticatedUser("Faça login para salvar a nova contagem.")) {
     return;
   }
   if (!state.sessionRows.length) {
@@ -6269,6 +6349,10 @@ async function saveNewCount() {
 }
 
 function discardNewCount() {
+  if (!requireAuthenticatedUser("Faça login para gerenciar a nova contagem.")) {
+    return;
+  }
+
   const confirmed = window.confirm(
     "Descartar a nova contagem? Os dados não salvos serão perdidos."
   );
@@ -6526,6 +6610,10 @@ function updateManualDependencies() {
 }
 
 async function addManualItem() {
+  if (!requireAuthenticatedUser("Faça login para adicionar itens manualmente.")) {
+    return;
+  }
+
   if (
     !elements.manualSetor ||
     !elements.manualProduto ||
@@ -7207,6 +7295,7 @@ async function handleAuthState(event, session) {
       setAuthMessage("info", "Sessão expirada. Faça login novamente.");
       return;
     }
+    unlockRestrictedAccess();
     if (elements.menuUserEmail) {
       elements.menuUserEmail.textContent = displayUserFromEmail(
         state.user.email
@@ -7241,8 +7330,7 @@ async function handleAuthState(event, session) {
     if (elements.menuUser) elements.menuUser.classList.add("hidden");
     if (elements.menuLogout) elements.menuLogout.classList.add("hidden");
     if (PAGE_MODE === "edit") {
-      showAuthPanel();
-      hideCountPanels();
+      lockRestrictedAccess("Faça login para acessar a edição de estoque.");
       state.userRows = [];
       state.countMode = "current";
       state.editSection = "stock";
@@ -7251,8 +7339,7 @@ async function handleAuthState(event, session) {
       renderCountTable();
       renderCountSyncStatus();
     } else if (PAGE_MODE === "products") {
-      showAuthPanel();
-      hideCountPanels();
+      lockRestrictedAccess("Faça login para acessar o cadastro de produtos.");
     } else {
       hideAuthPanel();
       hideCountPanels();
@@ -7324,6 +7411,9 @@ updateCountModeUI();
 setupTheme();
 setupVoice();
 setupEvents();
+if (isRestrictedPageMode()) {
+  lockRestrictedAccess();
+}
 setSidebarOpen(false);
 setupDashboard();
 setupAuth();

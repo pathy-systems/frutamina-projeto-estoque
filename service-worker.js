@@ -1,14 +1,11 @@
-/*
+﻿/*
   Service worker do PWA.
 
   Objetivo:
-  - manter o shell do app disponivel offline;
-  - servir paginas/estilos/scripts do cache quando a rede cair;
-  - atualizar o cache automaticamente quando a versao muda.
-*/
 
-const STATIC_CACHE = "frutamina-static-v26";
-const RUNTIME_CACHE = "frutamina-runtime-v26";
+
+const STATIC_CACHE = "frutamina-static-v27";
+const RUNTIME_CACHE = "frutamina-runtime-v27";
 
 const APP_SHELL = [
   "./",
@@ -17,8 +14,8 @@ const APP_SHELL = [
   "./produtos.html",
   "./visao-geral.html",
   "./manifest.webmanifest",
-  "./styles.css?v=20260423-5",
-  "./assets/app.js?v=20260423-1",
+  "./styles.css?v=20260423-7",
+  "./assets/app.js?v=20260423-3",
   "./assets/img/logo.webp",
   "./assets/img/capa.png",
   "./assets/img/icon-192.png",

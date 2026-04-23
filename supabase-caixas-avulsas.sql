@@ -1,5 +1,5 @@
--- Migracao de caixas avulsas:
--- adiciona a coluna, recalcula totais antigos e recria a trigger de normalizacao.
+-- Migração de caixas avulsas:
+-- adiciona a coluna, recalcula totais antigos e recria a trigger de normalização.
 
 ALTER TABLE IF EXISTS public.estoque_registros
 ADD COLUMN IF NOT EXISTS caixas_avulsas INTEGER NOT NULL DEFAULT 0
