@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
@@ -20,7 +20,7 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
     />
-    <link rel="stylesheet" href="styles.css?v=20260422-7" />
+    <link rel="stylesheet" href="styles.css?v=20260423-1" />
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
   <body data-page="dashboard">
@@ -48,6 +48,16 @@
         </button>
       </nav>
       <div class="sidebar-footer">
+        <button
+          id="theme-toggle"
+          class="ghost theme-toggle"
+          type="button"
+          aria-label="Ativar tema escuro"
+          title="Tema escuro"
+        >
+          <i class="bi bi-moon-stars"></i>
+          <span id="theme-toggle-label" class="sidebar-label">Tema escuro</span>
+        </button>
         <div id="menu-user" class="user-chip hidden">
           <span>Usuario</span>
           <strong id="menu-user-email">--</strong>
@@ -62,85 +72,123 @@
     <div class="app">
       <header class="mobile-topbar">
         <img src="assets/img/logo.webp" alt="Frutamina" class="mobile-topbar-logo" />
-        <button
-          id="sidebar-toggle"
-          class="sidebar-toggle"
-          type="button"
-          aria-label="Abrir menu"
-          aria-expanded="false"
-        >
-          <i class="bi bi-list"></i>
-        </button>
-      </header>
-      <!-- Cabecalho visual da pagina. -->
-      <header class="hero">
-        <div>
-          <img src="assets/img/logo.webp" alt="logo" class="logo" />
-          <p class="eyebrow">CD | Contagem do estoque</p>
-          <h1>Visão Geral</h1>
+        <div class="mobile-topbar-actions">
+          <button
+            id="mobile-theme-toggle"
+            class="sidebar-toggle"
+            type="button"
+            aria-label="Ativar tema escuro"
+            title="Tema escuro"
+          >
+            <i class="bi bi-moon-stars"></i>
+          </button>
+          <button
+            id="sidebar-toggle"
+            class="sidebar-toggle"
+            type="button"
+            aria-label="Abrir menu"
+            aria-expanded="false"
+          >
+            <i class="bi bi-list"></i>
+          </button>
         </div>
       </header>
+      <section id="dashboard-panel" class="overview-shell">
+        <header class="overview-head">
+          <h1>Visão Geral</h1>
+          <p>Resumo analítico do estoque atual do CD.</p>
+        </header>
 
-      <!-- Painel do dashboard: total de caixas, saida do CD e comparacao. -->
-      <section id="dashboard-panel" class="grid">
-        <!-- Grafico principal de total de caixas do CD. -->
-        <section class="card full dashboard-card">
-          <div class="dashboard-header">
-            <div>
-              <p class="eyebrow">Movimentação do CD</p>
-              <h2 class="dashboard-title">Total de caixas</h2>
-            </div>
-          </div>
-          <div class="chart-summary">
-            <div class="chart-main-value" id="chart-total-value">--</div>
-            <div class="chart-sub" id="chart-total-change">--</div>
-            <div class="chart-sub chart-date" id="chart-total-date">--</div>
-          </div>
-          <div class="chart-range" id="chart-range">
-            <button class="range-btn active" data-range="1D">1D</button>
-            <button class="range-btn" data-range="5D">5D</button>
-            <button class="range-btn" data-range="1M">1M</button>
-            <button class="range-btn" data-range="6M">6M</button>
-            <button class="range-btn" data-range="1Y">1Y</button>
-            <button class="range-btn" data-range="5Y">5Y</button>
-            <button class="range-btn" data-range="MAX">Max</button>
-          </div>
-          <div class="chart-wrap chart-dark">
-            <canvas id="chart-total" width="900" height="260"></canvas>
-            <div class="chart-tooltip" id="chart-total-tooltip"></div>
-          </div>
+        <section class="overview-metrics">
+          <article class="overview-metric metric-green">
+            <span class="overview-metric-label">Total de caixas</span>
+            <strong class="overview-metric-value" id="ov-total-caixas">--</strong>
+            <span class="overview-metric-meta" id="ov-total-caixas-meta">--</span>
+          </article>
+          <article class="overview-metric metric-amber">
+            <span class="overview-metric-label">Pallets</span>
+            <strong class="overview-metric-value" id="ov-total-pallets">--</strong>
+            <span class="overview-metric-meta" id="ov-total-pallets-meta">--</span>
+          </article>
+          <article class="overview-metric metric-blue">
+            <span class="overview-metric-label">Produtos distintos</span>
+            <strong class="overview-metric-value" id="ov-produtos-distintos">--</strong>
+            <span class="overview-metric-meta" id="ov-produtos-distintos-meta">--</span>
+          </article>
+          <article class="overview-metric metric-red">
+            <span class="overview-metric-label">Baixo estoque</span>
+            <strong class="overview-metric-value" id="ov-baixo-estoque">--</strong>
+            <span class="overview-metric-meta" id="ov-baixo-estoque-meta">--</span>
+          </article>
         </section>
 
-        <!-- Grafico de caixas que sairam entre uma contagem e outra. -->
-        <section class="card full dashboard-card">
-          <div class="dashboard-header">
-            <div>
-              <p class="eyebrow">Saída do CD</p>
-              <h2 class="dashboard-title">Caixas que saíram</h2>
+        <section class="overview-grid-two">
+          <article class="overview-card">
+            <div class="overview-card-head">
+              <h2>Distribuição por Setor</h2>
+              <span class="overview-pill">caixas</span>
             </div>
-          </div>
-          <div class="chart-summary">
-            <div class="chart-main-value" id="chart-outflow-value">--</div>
-            <div class="chart-sub" id="chart-outflow-change">--</div>
-            <div class="chart-sub chart-date" id="chart-outflow-date">--</div>
-          </div>
-          <div class="chart-wrap chart-dark">
-            <canvas id="chart-outflow" width="900" height="260"></canvas>
-            <div class="chart-tooltip" id="chart-outflow-tooltip"></div>
-          </div>
+            <div id="ov-setor-bars" class="overview-bars"></div>
+          </article>
+
+          <article class="overview-card">
+            <div class="overview-card-head">
+              <h2>Top Produtos em Estoque</h2>
+              <span class="overview-pill highlight">total cx</span>
+            </div>
+            <div id="ov-top-produtos-list" class="overview-top-list"></div>
+          </article>
         </section>
-        <!-- Relatorio detalhado do que saiu na ultima comparacao salva. -->
-        <section class="card full comparison-card">
-          <div class="card-header">
-            <h2>Saidas da ultima contagem</h2>
-            <p id="comparison-meta">Ainda nao existe comparacao salva.</p>
+
+        <section class="overview-grid-two">
+          <article class="overview-card">
+            <div class="overview-card-head">
+              <h2><i class="bi bi-exclamation-triangle"></i> Alertas e Avisos</h2>
+            </div>
+            <div id="ov-alert-list" class="overview-alert-list"></div>
+          </article>
+
+          <article class="overview-card">
+            <div class="overview-card-head">
+              <h2>Histórico de Contagens</h2>
+              <span class="overview-pill">eventos</span>
+            </div>
+            <div class="table-wrap overview-history-wrap">
+              <table class="overview-history-table">
+                <thead>
+                  <tr>
+                    <th>Quando</th>
+                    <th>Operador</th>
+                    <th>Evento</th>
+                    <th>Variação</th>
+                  </tr>
+                </thead>
+                <tbody id="ov-history-body"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="overview-card">
+          <div class="overview-card-head">
+            <h2>Distribuição por Marca</h2>
           </div>
-          <div id="comparison-body"></div>
+          <div class="overview-brand-layout">
+            <div class="overview-donut-wrap">
+              <div id="ov-brand-chart" class="overview-donut">
+                <div class="overview-donut-center">
+                  <strong id="ov-brand-chart-total">0</strong>
+                  <span>marcas</span>
+                </div>
+              </div>
+            </div>
+            <div id="ov-brand-grid" class="overview-brand-grid"></div>
+          </div>
         </section>
       </section>
     </div>
 
-    <script src="assets/app.js?v=20260422-3"></script>
+    <script src="assets/app.js?v=20260423-1"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
@@ -152,3 +200,4 @@
     </script>
   </body>
 </html>
+
