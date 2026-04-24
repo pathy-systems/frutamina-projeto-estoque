@@ -1343,6 +1343,40 @@ function isCorrectCommand(text) {
   return tokens.some((token) => CORRECT_KEYWORDS.has(token));
 }
 
+/**
+ * Quando o reconhecedor de voz une dois números falados rapidamente
+ * (ex: "5" + "6" → "56"), este utilitário decompõe o número resultante
+ * em seus dígitos individuais e retorna apenas os que são tipos válidos
+ * (entre TIPO_MIN e TIPO_MAX, atualmente 3–15).
+ *
+ * Regra:
+ *  - Se o valor já estiver dentro do intervalo [TIPO_MIN, TIPO_MAX], é
+ *    retornado sem modificação.
+ *  - Se for > TIPO_MAX, cada dígito decimal é extraído e, caso seja um
+ *    tipo válido, é incluído no resultado.
+ *
+ * Esta função NÃO deve ser chamada em modo addCommand nem boxCommand,
+ * pois nesses contextos o número representa uma quantidade, não um tipo.
+ */
+function splitOversizedTipoNumbers(values) {
+  const result = [];
+  for (const value of values) {
+    if (value >= TIPO_MIN && value <= TIPO_MAX) {
+      result.push(value);
+      continue;
+    }
+    if (value > TIPO_MAX) {
+      const digits = String(value).split("").map(Number);
+      for (const digit of digits) {
+        if (digit >= TIPO_MIN && digit <= TIPO_MAX) {
+          result.push(digit);
+        }
+      }
+    }
+  }
+  return result;
+}
+
 /*
   ===== Mensagens de interface, cache e rascunho offline =====
   Tudo que ajuda o usuario a acompanhar o estado da contagem passa por aqui.
@@ -4763,17 +4797,24 @@ async function processCommand(rawText) {
   const numericValues = extractCommandNumbers(rawText, ignoredValues, state.produto)
     .map((value) => Number.parseInt(value, 10))
     .filter((value) => Number.isFinite(value) && value > 0);
-  const tipoValues = extractCommandTipoValues(
+  const noTipo = isNoTipoContext(state.produto, state.marca);
+  const addCommand = isAddCommand(rawText);
+  const boxCommand = hasBoxKeyword(rawText);
+  const rawTipoValues = extractCommandTipoValues(
     rawText,
     state.produto,
     ignoredValues
   ).filter((value) => Number.isFinite(value) && value > 0);
+  // Quando o usuario fala dois tipos rapidamente (ex: "5" "6" reconhecido
+  // como "56"), o numero resultante e maior que TIPO_MAX. Fora dos modos
+  // addCommand e boxCommand (onde o numero e uma quantidade, nao um tipo),
+  // decompomos o valor em digitos individuais validos.
+  const tipoValues = (!addCommand && !boxCommand)
+    ? splitOversizedTipoNumbers(rawTipoValues)
+    : rawTipoValues;
   const specialTipos = tipoValues.filter((value) =>
     isSpecialTipoVariantValue(state.produto, value)
   );
-  const noTipo = isNoTipoContext(state.produto, state.marca);
-  const addCommand = isAddCommand(rawText);
-  const boxCommand = hasBoxKeyword(rawText);
 
   if (boxCommand && !numericValues.length) {
     pushMessage("warn", "Diga a quantidade de caixas.");
