@@ -7750,6 +7750,7 @@ function showNotificationInvite() {
     </div>
     <div style="display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 8px;">
       <button id="notif-allow" style="background: var(--primary-color, #007bff); color: #fff; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; width: 100%;">Sim, quero ativar</button>
+      <button id="notif-test" style="background: #28a745; color: #fff; border: none; padding: 10px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; width: 100%;">Enviar Teste Agora</button>
       <button id="notif-ignore" style="background: none; border: none; padding: 8px; cursor: pointer; font-size: 14px; color: var(--text-muted, #666); width: 100%;">Agora não</button>
     </div>
   `;
@@ -7766,6 +7767,23 @@ function showNotificationInvite() {
   document.getElementById("notif-allow").onclick = async () => {
     closeAll();
     await requestNotificationPermission();
+  };
+
+  document.getElementById("notif-test").onclick = async () => {
+    if (Notification.permission !== "granted") {
+      await requestNotificationPermission();
+    }
+    if (Notification.permission === "granted") {
+      const registration = await navigator.serviceWorker.ready;
+      registration.showNotification("Teste de Conexão", {
+        body: "Se você está vendo isso, as notificações locais estão funcionando!",
+        icon: "./assets/img/icon-192.png",
+        vibrate: [200, 100, 200]
+      });
+      pushMessage("success", "Notificação de teste enviada!");
+    } else {
+      pushMessage("error", "Permissão de notificação negada pelo navegador.");
+    }
   };
 }
 
