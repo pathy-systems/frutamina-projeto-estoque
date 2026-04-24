@@ -180,6 +180,9 @@ const SAVE_KEYWORDS = new Set(["SALVAR", "ENVIAR", "PUBLICAR"]);
 const DISCARD_KEYWORDS = new Set(["DESCARTAR", "DESCARTAR RASCUNHO", "CANCELAR", "CANCELAR RASCUNHO"]);
 
 
+// Timer para agrupamento de notificações (debounce)
+let notificationDebounceTimer = null;
+
 // Estado global compartilhado entre as páginas. Cada tela usa apenas parte dele.
 const state = {
   setor: Object.keys(CONFIG_GERAL)[0],
@@ -4416,6 +4419,31 @@ function formatTipoCounts(tipoCounts, produto, marca = "") {
     .join(", ");
 }
 
+/**
+ * Dispara uma notificação push agrupada após um período de inatividade.
+ */
+function triggerDebouncedNotification() {
+  if (notificationDebounceTimer) {
+    clearTimeout(notificationDebounceTimer);
+  }
+
+  notificationDebounceTimer = setTimeout(async () => {
+    if (Notification.permission === "granted" && state.user) {
+      const userLabel = displayUserFromEmail(state.user.email);
+      
+      // Notificação local
+      new Notification("Estoque Atualizado", {
+        body: `O estoque do CD recebeu novas alterações por ${userLabel}`,
+        icon: "./assets/img/icon-192.png"
+      });
+
+      // Nota: O disparo para outros usuários via Edge Function 
+      // ocorrerá automaticamente se o Webhook estiver configurado no INSERT/UPDATE.
+    }
+    notificationDebounceTimer = null;
+  }, 120000); // 2 minutos de espera
+}
+
 async function registerInventoryChange({
   setor,
   produto,
@@ -4534,6 +4562,8 @@ async function registerInventoryChange({
   });
   if (launchRecord) {
     setLastLaunch(launchRecord);
+    // Aciona o timer de notificação agrupada
+    triggerDebouncedNotification();
   }
   return launchRecord;
 }
