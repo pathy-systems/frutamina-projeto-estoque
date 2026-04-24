@@ -117,3 +117,48 @@ self.addEventListener("fetch", (event) => {
 
 
 
+
+// Suporte a Notificações Push
+self.addEventListener("push", (event) => {
+  let data = { title: "Frutamina", body: "Estoque atualizado." };
+  
+  try {
+    if (event.data) {
+      data = event.data.json();
+    }
+  } catch (e) {
+    data = { title: "Frutamina", body: event.data.text() };
+  }
+
+  const options = {
+    body: data.body,
+    icon: "./assets/img/icon-192.png",
+    badge: "./assets/img/icon-192.png",
+    vibrate: [100, 50, 100],
+    data: {
+      dateOfArrival: Date.now(),
+      primaryKey: "1"
+    },
+    actions: [
+      { action: "explore", title: "Ver Estoque", icon: "./assets/img/icon-192.png" },
+      { action: "close", title: "Fechar", icon: "./assets/img/icon-192.png" }
+    ]
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  if (event.action === "explore") {
+    event.waitUntil(
+      clients.openWindow("./visao-geral.html")
+    );
+  } else {
+    event.waitUntil(
+      clients.openWindow("./")
+    );
+  }
+});

@@ -6493,12 +6493,20 @@ async function saveNewCount() {
     renderContext();
     await loadUserRecords();
     await loadPublicRecords();
-    pushMessage(
-      snapshotSaved ? "success" : "warn",
-      snapshotSaved
+    const successMsg = snapshotSaved
         ? "Nova contagem salva. Visao geral atualizada com total e saida."
-        : "Nova contagem salva, mas o historico da visao geral nao foi atualizado."
-    );
+        : "Nova contagem salva, mas o historico da visao geral nao foi atualizado.";
+    
+    pushMessage(snapshotSaved ? "success" : "warn", successMsg);
+
+    // Notificação local para o usuário
+    if (Notification.permission === "granted") {
+      const userLabel = displayUserFromEmail(state.user.email);
+      new Notification("Estoque Atualizado", {
+        body: `O estoque do CD foi atualizado por ${userLabel}`,
+        icon: "./assets/img/icon-192.png"
+      });
+    }
   } catch (error) {
     pushMessage(
       "error",
@@ -7588,3 +7596,32 @@ window.addEventListener("resize", () => {
     renderDashboard();
   }
 });
+
+/**
+ * Solicita permissão para notificações push e registra o token se aceito.
+ */
+async function requestNotificationPermission() {
+  if (!("Notification" in window)) {
+    console.warn("Este navegador não suporta notificações desktop.");
+    return;
+  }
+
+  if (Notification.permission === "granted") {
+    return;
+  }
+
+  if (Notification.permission !== "denied") {
+    const permission = await Notification.requestPermission();
+    if (permission === "granted") {
+      pushMessage("success", "Notificações ativadas com sucesso!");
+      // Aqui no futuro registraremos o token no Supabase
+    }
+  }
+}
+
+// Tenta pedir permissão após o login ou interação
+if (elements.loginBtn) {
+  elements.loginBtn.addEventListener("click", () => {
+    setTimeout(requestNotificationPermission, 3000);
+  });
+}
