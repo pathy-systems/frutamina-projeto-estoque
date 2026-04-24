@@ -7661,48 +7661,80 @@ function showNotificationInvite() {
     return;
   }
 
+  // Overlay para bloquear a tela
+  const overlay = document.createElement("div");
+  overlay.id = "notification-overlay";
+  overlay.style = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 99998;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  `;
+
   const invite = document.createElement("div");
   invite.id = "notification-invite";
   invite.style = `
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
     background: var(--card-bg, #fff);
     color: var(--text-main, #333);
-    padding: 16px 20px;
-    border-radius: 12px;
-    box-shadow: 0 8px 30px rgba(0,0,0,0.15);
-    z-index: 9999;
+    padding: 24px;
+    border-radius: 16px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+    z-index: 99999;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    align-items: center;
+    text-align: center;
+    gap: 16px;
     width: 90%;
-    max-width: 400px;
+    max-width: 350px;
     border: 1px solid var(--border-color, #eee);
+    animation: modalPop 0.3s ease-out;
   `;
+
+  // Adiciona animação simples
+  const styleSheet = document.createElement("style");
+  styleSheet.innerText = `
+    @keyframes modalPop {
+      from { transform: scale(0.8); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+  `;
+  document.head.appendChild(styleSheet);
 
   invite.innerHTML = `
-    <div style="display: flex; align-items: center; gap: 12px;">
-      <div style="background: var(--primary-color, #007bff); color: #fff; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px;">
-        <i class="bi bi-bell"></i>
-      </div>
-      <div style="flex: 1;">
-        <strong style="display: block; font-size: 16px;">Ativar Notificações?</strong>
-        <span style="font-size: 14px; opacity: 0.8;">Receba avisos quando o estoque for atualizado.</span>
-      </div>
+    <div style="background: var(--primary-color, #007bff); color: #fff; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; margin-bottom: 8px;">
+      <i class="bi bi-bell-fill"></i>
     </div>
-    <div style="display: flex; gap: 8px; justify-content: flex-end;">
-      <button id="notif-ignore" style="background: none; border: none; padding: 8px 12px; cursor: pointer; font-size: 14px; color: var(--text-muted, #666);">Agora não</button>
-      <button id="notif-allow" style="background: var(--primary-color, #007bff); color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">Ativar</button>
+    <div>
+      <strong style="display: block; font-size: 20px; margin-bottom: 8px;">Ativar Notificações?</strong>
+      <p style="font-size: 15px; opacity: 0.9; line-height: 1.4; margin: 0;">
+        Fique por dentro! Receba avisos em tempo real toda vez que o estoque do CD for atualizado.
+      </p>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 8px;">
+      <button id="notif-allow" style="background: var(--primary-color, #007bff); color: #fff; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; width: 100%;">Sim, quero ativar</button>
+      <button id="notif-ignore" style="background: none; border: none; padding: 8px; cursor: pointer; font-size: 14px; color: var(--text-muted, #666); width: 100%;">Agora não</button>
     </div>
   `;
 
-  document.body.appendChild(invite);
+  overlay.appendChild(invite);
+  document.body.appendChild(overlay);
 
-  document.getElementById("notif-ignore").onclick = () => invite.remove();
+  const closeAll = () => {
+    overlay.remove();
+    styleSheet.remove();
+  };
+
+  document.getElementById("notif-ignore").onclick = closeAll;
   document.getElementById("notif-allow").onclick = async () => {
-    invite.remove();
+    closeAll();
     await requestNotificationPermission();
   };
 }
