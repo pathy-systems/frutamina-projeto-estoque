@@ -7600,22 +7600,52 @@ window.addEventListener("resize", () => {
 /**
  * Solicita permissão para notificações push e registra o token se aceito.
  */
+/**
+ * Registra a assinatura de push no Supabase para o usuário atual.
+ */
+async function savePushSubscription(subscription) {
+  if (!state.user) return;
+  
+  try {
+    const { error } = await supabaseClient
+      .from("push_subscriptions")
+      .upsert({
+        user_id: state.user.id,
+        subscription: subscription
+      }, { onConflict: 'user_id,subscription' });
+
+    if (error) throw error;
+    console.log("Assinatura de push salva no Supabase.");
+  } catch (error) {
+    console.error("Erro ao salvar assinatura de push:", error);
+  }
+}
+
+/**
+ * Solicita permissão para notificações push e registra o token se aceito.
+ */
 async function requestNotificationPermission() {
-  if (!("Notification" in window)) {
-    console.warn("Este navegador não suporta notificações desktop.");
+  if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+    console.warn("Este navegador não suporta notificações push.");
     return;
   }
 
-  if (Notification.permission === "granted") {
-    return;
-  }
-
-  if (Notification.permission !== "denied") {
+  try {
     const permission = await Notification.requestPermission();
     if (permission === "granted") {
-      pushMessage("success", "Notificações ativadas com sucesso!");
-      // Aqui no futuro registraremos o token no Supabase
+      const registration = await navigator.serviceWorker.ready;
+      
+      // Nota: Para produção, você precisará de uma chave VAPID pública aqui
+      // const subscription = await registration.pushManager.subscribe({
+      //   userVisibleOnly: true,
+      //   applicationServerKey: "SUA_CHAVE_VAPID_PUBLICA_AQUI"
+      // });
+      // await savePushSubscription(subscription);
+      
+      pushMessage("success", "Notificações ativadas! (Aguardando chave VAPID para push remoto)");
     }
+  } catch (error) {
+    console.error("Erro ao solicitar permissão de notificação:", error);
   }
 }
 
