@@ -4713,7 +4713,9 @@ async function processCommand(rawText) {
     return;
   }
 
+  console.log("[DEBUG] processCommand rawText:", rawText);
   const tokens = tokenizeText(rawText);
+  console.log("[DEBUG] tokens após tokenizeText:", tokens);
   if (!tokens.length) return;
 
   if (isRemoveCommand(rawText)) {
@@ -4812,6 +4814,7 @@ async function processCommand(rawText) {
   const tipoValues = (!addCommand && !boxCommand)
     ? splitOversizedTipoNumbers(rawTipoValues)
     : rawTipoValues;
+  console.log("[DEBUG] rawTipoValues:", rawTipoValues, "tipoValues apos split:", tipoValues, "addCommand:", addCommand, "boxCommand:", boxCommand);
   const specialTipos = tipoValues.filter((value) =>
     isSpecialTipoVariantValue(state.produto, value)
   );
