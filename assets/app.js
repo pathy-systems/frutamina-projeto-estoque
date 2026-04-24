@@ -4428,20 +4428,44 @@ function triggerDebouncedNotification() {
   }
 
   notificationDebounceTimer = setTimeout(async () => {
-    if (Notification.permission === "granted" && state.user) {
+    if (state.user) {
       const userLabel = displayUserFromEmail(state.user.email);
-      
-      // Notificação local
-      new Notification("Estoque Atualizado", {
-        body: `O estoque do CD recebeu novas alterações por ${userLabel}`,
-        icon: "./assets/img/icon-192.png"
-      });
 
-      // Nota: O disparo para outros usuários via Edge Function 
-      // ocorrerá automaticamente se o Webhook estiver configurado no INSERT/UPDATE.
+      // Notificação local (para o próprio usuário que fez a alteração)
+      if (Notification.permission === "granted") {
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          reg.showNotification("Estoque Atualizado", {
+            body: `O estoque do CD recebeu novas alterações por ${userLabel}`,
+            icon: "./assets/img/icon-192.png",
+            badge: "./assets/img/icon-192.png",
+            vibrate: [100, 50, 100],
+          });
+        } catch (e) {
+          console.warn("Falha ao exibir notificação local:", e);
+        }
+      }
+
+      // Disparo para outros usuários via Edge Function do Supabase
+      try {
+        const { data: sessionData } = await supabaseClient.auth.getSession();
+        const accessToken = sessionData?.session?.access_token;
+        if (accessToken) {
+          await fetch(`${SUPABASE_URL}/functions/v1/push-notifications`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({ user_email: state.user.email }),
+          });
+        }
+      } catch (e) {
+        console.warn("Falha ao chamar Edge Function de notificações:", e);
+      }
     }
     notificationDebounceTimer = null;
-  }, 120000); // 2 minutos de espera
+  }, 3000); // 3 segundos de espera para agrupar lançamentos rápidos
 }
 
 async function registerInventoryChange({
@@ -6529,13 +6553,37 @@ async function saveNewCount() {
     
     pushMessage(snapshotSaved ? "success" : "warn", successMsg);
 
-    // Notificação local para o usuário
+    // Notificação local + disparo para outros usuários via Edge Function
+    const userLabel = displayUserFromEmail(state.user.email);
     if (Notification.permission === "granted") {
-      const userLabel = displayUserFromEmail(state.user.email);
-      new Notification("Estoque Atualizado", {
-        body: `O estoque do CD foi atualizado por ${userLabel}`,
-        icon: "./assets/img/icon-192.png"
-      });
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        reg.showNotification("Estoque Atualizado", {
+          body: `O estoque do CD foi atualizado por ${userLabel}`,
+          icon: "./assets/img/icon-192.png",
+          badge: "./assets/img/icon-192.png",
+          vibrate: [100, 50, 100],
+        });
+      } catch (e) {
+        console.warn("Falha ao exibir notificação local:", e);
+      }
+    }
+    // Disparo para outros usuários via Edge Function
+    try {
+      const { data: sessionData } = await supabaseClient.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (accessToken) {
+        await fetch(`${SUPABASE_URL}/functions/v1/push-notifications`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ user_email: state.user.email }),
+        });
+      }
+    } catch (e) {
+      console.warn("Falha ao chamar Edge Function de notificações:", e);
     }
   } catch (error) {
     pushMessage(
@@ -7635,14 +7683,27 @@ window.addEventListener("resize", () => {
  */
 async function savePushSubscription(subscription) {
   if (!state.user) return;
-  
+
   try {
+    // Serializa o PushSubscription para JSON puro (objeto nativo do browser precisa de toJSON)
+    const subscriptionJson = subscription.toJSON
+      ? subscription.toJSON()
+      : JSON.parse(JSON.stringify(subscription));
+
+    // Remove assinatura antiga deste dispositivo (mesmo endpoint) para evitar duplicatas
+    await supabaseClient
+      .from("push_subscriptions")
+      .delete()
+      .eq("user_id", state.user.id)
+      .eq("subscription->>endpoint", subscriptionJson.endpoint);
+
+    // Insere a nova assinatura
     const { error } = await supabaseClient
       .from("push_subscriptions")
-      .upsert({
+      .insert({
         user_id: state.user.id,
-        subscription: subscription
-      }, { onConflict: 'user_id,subscription' });
+        subscription: subscriptionJson,
+      });
 
     if (error) throw error;
     console.log("Assinatura de push salva no Supabase.");
