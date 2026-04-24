@@ -7652,9 +7652,8 @@ async function requestNotificationPermission() {
   }
 }
 
-// Tenta pedir permissão após o login ou interação
-if (elements.loginBtn) {
-  elements.loginBtn.addEventListener("click", () => {
-    setTimeout(requestNotificationPermission, 3000);
-  });
-}
+// Solicita permissão de notificação imediatamente ao carregar a página
+window.addEventListener("load", () => {
+  // Pequeno delay de 1s apenas para garantir que o Service Worker esteja pronto
+  setTimeout(requestNotificationPermission, 1000);
+});
