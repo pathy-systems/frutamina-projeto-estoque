@@ -7652,8 +7652,62 @@ async function requestNotificationPermission() {
   }
 }
 
-// Solicita permissão de notificação imediatamente ao carregar a página
+/**
+ * Cria e exibe um convite amigável para ativar notificações,
+ * garantindo a interação do usuário exigida pelos navegadores.
+ */
+function showNotificationInvite() {
+  if (!("Notification" in window) || Notification.permission !== "default") {
+    return;
+  }
+
+  const invite = document.createElement("div");
+  invite.id = "notification-invite";
+  invite.style = `
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--card-bg, #fff);
+    color: var(--text-main, #333);
+    padding: 16px 20px;
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 90%;
+    max-width: 400px;
+    border: 1px solid var(--border-color, #eee);
+  `;
+
+  invite.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <div style="background: var(--primary-color, #007bff); color: #fff; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px;">
+        <i class="bi bi-bell"></i>
+      </div>
+      <div style="flex: 1;">
+        <strong style="display: block; font-size: 16px;">Ativar Notificações?</strong>
+        <span style="font-size: 14px; opacity: 0.8;">Receba avisos quando o estoque for atualizado.</span>
+      </div>
+    </div>
+    <div style="display: flex; gap: 8px; justify-content: flex-end;">
+      <button id="notif-ignore" style="background: none; border: none; padding: 8px 12px; cursor: pointer; font-size: 14px; color: var(--text-muted, #666);">Agora não</button>
+      <button id="notif-allow" style="background: var(--primary-color, #007bff); color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">Ativar</button>
+    </div>
+  `;
+
+  document.body.appendChild(invite);
+
+  document.getElementById("notif-ignore").onclick = () => invite.remove();
+  document.getElementById("notif-allow").onclick = async () => {
+    invite.remove();
+    await requestNotificationPermission();
+  };
+}
+
+// Tenta mostrar o convite ao carregar a página
 window.addEventListener("load", () => {
-  // Pequeno delay de 1s apenas para garantir que o Service Worker esteja pronto
-  setTimeout(requestNotificationPermission, 1000);
+  setTimeout(showNotificationInvite, 2000);
 });
