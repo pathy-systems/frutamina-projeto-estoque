@@ -1,10 +1,7 @@
 
 /**
- * CÓDIGO PARA SUPABASE EDGE FUNCTION (Deno)
- * Nome sugerido: push-notifications
- * 
- * Esta função deve ser implantada no Supabase.
- * Ela será disparada por um Webhook do banco de dados quando houver um INSERT na tabela de estoque.
+ * CÓDIGO FINAL PARA SUPABASE EDGE FUNCTION (Deno)
+ * Nome: push-notifications
  */
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
@@ -14,7 +11,6 @@ import webpush from "https://esm.sh/web-push@3.6.6"
 const VAPID_PUBLIC_KEY = "BAjzR0T971QRQTTcQxMMt4QmJcpBPZpRLWMRDiqAPgD2Jvs2dvfEkrz217PgqfLK2dOVmea-718DAv95d-7_MS0"
 const VAPID_PRIVATE_KEY = "BemWL3eHdPV9NwYyUAMARSwJ5ezIiz5kPJZFfD9zFLE"
 
-// Configura as chaves VAPID
 webpush.setVapidDetails(
   'mailto:contato@frutamina.com.br',
   VAPID_PUBLIC_KEY,
@@ -22,33 +18,40 @@ webpush.setVapidDetails(
 )
 
 serve(async (req) => {
+  // Habilitar CORS
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: { 'Access-Control-Allow-Origin': '*' } })
+  }
+
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Recebe os dados do Webhook (o novo registro de estoque)
+    // Tenta ler o corpo da requisição, mas não trava se falhar
     let userLabel = "Um usuário"
     try {
-      const payload = await req.json()
-      // O Supabase Webhook envia o registro em payload.record
-      // Se for um teste manual, o payload pode ser diferente
-      const record = payload?.record || payload
-      
+      const body = await req.json()
+      // O Supabase Webhook envia o registro em body.record
+      const record = body?.record || body
       if (record && record.user_email) {
-        userLabel = record.user_email.split('@')[0] // Pega apenas o nome antes do @
+        userLabel = record.user_email.split('@')[0]
       }
     } catch (e) {
-      console.log("Payload não processado ou vazio, usando label padrão.")
+      console.log("Sem payload JSON ou erro ao ler.")
     }
 
-    // 1. Busca todas as assinaturas de push ativas
+    // 1. Busca todas as assinaturas
     const { data: subscriptions, error } = await supabase
       .from('push_subscriptions')
       .select('subscription')
 
     if (error) throw error
+
+    if (!subscriptions || subscriptions.length === 0) {
+      return new Response(JSON.stringify({ message: "Nenhuma assinatura encontrada." }), { status: 200 })
+    }
 
     // 2. Prepara a mensagem
     const notificationPayload = JSON.stringify({
@@ -57,25 +60,25 @@ serve(async (req) => {
       url: "./visao-geral.html"
     })
 
-    // 3. Envia para todos os dispositivos em paralelo
-    const sendPromises = subscriptions.map((sub) => {
-      return webpush.sendNotification(sub.subscription, notificationPayload)
-        .catch(err => {
-          console.error("Erro ao enviar para uma assinatura:", err)
-          // Se o token expirou (404 ou 410), poderíamos deletar do banco aqui
-        })
-    })
+    // 3. Envia as notificações
+    const results = await Promise.allSettled(
+      subscriptions.map(sub => 
+        webpush.sendNotification(sub.subscription, notificationPayload)
+      )
+    )
 
-    await Promise.all(sendPromises)
-
-    return new Response(JSON.stringify({ success: true, sent: subscriptions.length }), {
-      headers: { 'Content-Type': 'application/json' },
+    return new Response(JSON.stringify({ 
+      success: true, 
+      total: subscriptions.length,
+      results: results.map(r => r.status)
+    }), {
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
       status: 200,
     })
 
   } catch (error) {
     return new Response(JSON.stringify({ error: error.message }), {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
       status: 500,
     })
   }
