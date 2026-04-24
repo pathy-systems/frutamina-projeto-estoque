@@ -175,6 +175,10 @@ const BOX_KEYWORDS = new Set([
 
 const REMOVE_KEYWORDS = new Set(["REMOVER", "REMOVA", "DESFAZER"]);
 const CORRECT_KEYWORDS = new Set(["CORRIGIR", "CORRIGE", "CORRECAO"]);
+const LAUNCH_KEYWORDS = new Set(["LANCAR", "LANÇAR", "LANÇAR ESTOQUE", "LANCAR ESTOQUE"]);
+const SAVE_KEYWORDS = new Set(["SALVAR", "ENVIAR", "PUBLICAR"]);
+const DISCARD_KEYWORDS = new Set(["DESCARTAR", "DESCARTAR RASCUNHO", "CANCELAR", "CANCELAR RASCUNHO"]);
+
 
 // Estado global compartilhado entre as páginas. Cada tela usa apenas parte dele.
 const state = {
@@ -1341,6 +1345,21 @@ function isRemoveCommand(text) {
 function isCorrectCommand(text) {
   const tokens = tokenizeText(text);
   return tokens.some((token) => CORRECT_KEYWORDS.has(token));
+}
+
+function isLaunchCommand(text) {
+  const tokens = tokenizeText(text);
+  return tokens.some((token) => LAUNCH_KEYWORDS.has(token));
+}
+
+function isSaveCommand(text) {
+  const tokens = tokenizeText(text);
+  return tokens.some((token) => SAVE_KEYWORDS.has(token));
+}
+
+function isDiscardCommand(text) {
+  const tokens = tokenizeText(text);
+  return tokens.some((token) => DISCARD_KEYWORDS.has(token));
 }
 
 /**
@@ -4726,6 +4745,38 @@ async function processCommand(rawText) {
   if (isCorrectCommand(rawText)) {
     beginVoiceCorrection();
     renderContext();
+    return;
+  }
+
+  if (isLaunchCommand(rawText) || isSaveCommand(rawText)) {
+    if (state.countMode !== "new") {
+      pushMessage("warn", "Voce nao esta em modo de nova contagem. Mude para nova contagem primeiro.");
+      renderContext();
+      return;
+    }
+    if (!state.sessionRows.length) {
+      pushMessage("warn", "Nenhum item na nova contagem para salvar.");
+      renderContext();
+      return;
+    }
+    pushMessage("info", "Salvando estoque...");
+    await saveNewCount();
+    return;
+  }
+
+  if (isDiscardCommand(rawText)) {
+    if (state.countMode !== "new") {
+      pushMessage("warn", "Voce nao esta em modo de nova contagem.");
+      renderContext();
+      return;
+    }
+    if (!state.sessionRows.length) {
+      pushMessage("warn", "Nenhum item na nova contagem para descartar.");
+      renderContext();
+      return;
+    }
+    pushMessage("info", "Descartando rascunho...");
+    await discardNewCount();
     return;
   }
 
