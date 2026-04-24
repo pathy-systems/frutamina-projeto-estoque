@@ -29,12 +29,19 @@ serve(async (req) => {
     )
 
     // Recebe os dados do Webhook (o novo registro de estoque)
-    const payload = await req.json()
-    const record = payload.record
-    
-    // Busca o nome do usuário que fez o lançamento (opcional, se disponível no payload)
-    // Aqui assumimos que o payload traz informações do registro inserido
-    const userLabel = record.user_email || "Um usuário"
+    let userLabel = "Um usuário"
+    try {
+      const payload = await req.json()
+      // O Supabase Webhook envia o registro em payload.record
+      // Se for um teste manual, o payload pode ser diferente
+      const record = payload?.record || payload
+      
+      if (record && record.user_email) {
+        userLabel = record.user_email.split('@')[0] // Pega apenas o nome antes do @
+      }
+    } catch (e) {
+      console.log("Payload não processado ou vazio, usando label padrão.")
+    }
 
     // 1. Busca todas as assinaturas de push ativas
     const { data: subscriptions, error } = await supabase
