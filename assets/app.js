@@ -5066,6 +5066,7 @@ async function processCommand(rawText) {
     const tiposValid = tipoValues.filter((value) =>
       isTipoValidForContext(state.produto, value)
     );
+    console.log("[DEBUG] tiposValid apos filtro:", tiposValid);
 
     if (!tiposValid.length) {
       pushMessage("warn", getTipoValidationMessage(state.produto));
