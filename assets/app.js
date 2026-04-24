@@ -7635,14 +7635,17 @@ async function requestNotificationPermission() {
     if (permission === "granted") {
       const registration = await navigator.serviceWorker.ready;
       
-      // Nota: Para produção, você precisará de uma chave VAPID pública aqui
-      // const subscription = await registration.pushManager.subscribe({
-      //   userVisibleOnly: true,
-      //   applicationServerKey: "SUA_CHAVE_VAPID_PUBLICA_AQUI"
-      // });
-      // await savePushSubscription(subscription);
+      // Chave VAPID pública gerada para o projeto
+      const VAPID_PUBLIC_KEY = "BAjzR0T971QRQTTcQxMMt4QmJcpBPZpRLWMRDiqAPgD2Jvs2dvfEkrz217PgqfLK2dOVmea-718DAv95d-7_MS0";
       
-      pushMessage("success", "Notificações ativadas! (Aguardando chave VAPID para push remoto)");
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: VAPID_PUBLIC_KEY
+      });
+      
+      await savePushSubscription(subscription);
+      
+      pushMessage("success", "Notificações ativadas com sucesso!");
     }
   } catch (error) {
     console.error("Erro ao solicitar permissão de notificação:", error);
