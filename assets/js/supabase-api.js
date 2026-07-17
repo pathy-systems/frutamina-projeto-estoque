@@ -1,0 +1,280 @@
+// Leitura e escrita no Supabase: estoque publico, itens do usuario e snapshots do dashboard.
+// Import dinamico do dashboard.js: esse modulo roda em todas as paginas (loadPublicRecords
+// e chamado no bootstrap de todas elas), mas o dashboard so existe em visao-geral.html.
+import { state, supabaseClient } from "./state.js";
+import {
+  TABLE_NAME,
+  SNAPSHOT_TABLE,
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  PUBLIC_CACHE_KEY,
+  PUBLIC_CACHE_AT_KEY,
+} from "./config.js";
+import { pushMessage, fetchWithTimeout, toNonNegativeInt, getSpecialTipoVariantByValue } from "./utils.js";
+import {
+  aggregateRows,
+  hydrateInventoryRow,
+  buildDbRowPayload,
+  isLooseBoxesSchemaError,
+} from "./inventory-core.js";
+import { updateLastUpdateFromRows, setPublicMessage, renderPublicTable, renderCountTable, getTotalCaixas } from "./tables.js";
+
+function renderDashboardIfLoaded() {
+  import("./dashboard.js").then((m) => m.renderDashboard());
+}
+
+export async function loadSnapshotRecords(options = {}) {
+  const { showError = false } = options;
+  const { data, error } = await supabaseClient
+    .from(SNAPSHOT_TABLE)
+    .select("*")
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    if (showError) {
+      pushMessage("error", `Erro ao carregar historico: ${error.message}`);
+    } else {
+      console.warn("Erro ao carregar historico:", error.message);
+    }
+    state.snapshotRows = [];
+    return { data: null, error };
+  }
+
+  state.snapshotRows = data || [];
+  renderDashboardIfLoaded();
+  return { data: state.snapshotRows, error: null };
+}
+
+function isSnapshotOutflowSchemaError(error) {
+  const message = error?.message || "";
+  return /outflow_caixas/i.test(message);
+}
+
+export async function saveSnapshotRecord({ rows, outflowCaixas = 0, showSuccess = true }) {
+  if (!state.user) {
+    pushMessage("warn", "Faca login para salvar o historico.");
+    return false;
+  }
+  const normalizedRows = aggregateRows(rows || []);
+  const total = getTotalCaixas(normalizedRows);
+  const payload = {
+    user_id: state.user.id,
+    total_caixas: total,
+  };
+  if (outflowCaixas > 0) {
+    payload.outflow_caixas = outflowCaixas;
+  }
+
+  const { error } = await supabaseClient.from(SNAPSHOT_TABLE).insert(payload);
+  if (error) {
+    const message = isSnapshotOutflowSchemaError(error)
+      ? "Historico salvo sem saida. Rode a migracao do dashboard no Supabase."
+      : `Erro ao salvar historico: ${error.message}`;
+    pushMessage("error", message);
+    return false;
+  }
+  if (showSuccess) {
+    pushMessage("success", "Historico salvo com sucesso.");
+  }
+  await loadSnapshotRecords();
+  return true;
+}
+
+function savePublicCache(rows) {
+  try {
+    localStorage.setItem(PUBLIC_CACHE_KEY, JSON.stringify(rows || []));
+    localStorage.setItem(PUBLIC_CACHE_AT_KEY, new Date().toISOString());
+  } catch (error) {
+    console.warn("Nao foi possivel salvar cache publico.", error);
+  }
+}
+
+function loadPublicCache() {
+  try {
+    const raw = localStorage.getItem(PUBLIC_CACHE_KEY);
+    if (!raw) return [];
+    const data = JSON.parse(raw);
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.warn("Nao foi possivel ler cache publico.", error);
+    return [];
+  }
+}
+
+export async function loadPublicRecords() {
+  const { data, error } = await supabaseClient
+    .from(TABLE_NAME)
+    .select("*");
+
+  if (error) {
+    const cached = loadPublicCache();
+    if (cached.length) {
+      state.rawPublicRows = cached;
+      state.dashboardSeries = null;
+      state.dashboardHover.total = null;
+      state.dashboardHover.outflow = null;
+      state.publicRows = aggregateRows(cached);
+      updateLastUpdateFromRows(cached, "public");
+      renderPublicTable();
+      renderCountTable();
+      renderDashboardIfLoaded();
+      setPublicMessage(
+        "warn",
+        "Sem acesso ao servidor. Exibindo o ultimo estoque salvo."
+      );
+      return;
+    }
+    setPublicMessage("error", `Erro ao carregar dados: ${error.message}`);
+    return;
+  }
+
+  state.rawPublicRows = data || [];
+  savePublicCache(state.rawPublicRows);
+  state.dashboardSeries = null;
+  state.dashboardHover.total = null;
+  state.dashboardHover.outflow = null;
+  state.publicRows = aggregateRows(data || []);
+  updateLastUpdateFromRows(data || [], "public");
+  renderPublicTable();
+  renderCountTable();
+  renderDashboardIfLoaded();
+  setPublicMessage("", "");
+}
+
+export async function loadUserRecords(options = {}) {
+  const { showError = true } = options;
+  if (!state.user) {
+    state.userRows = [];
+    renderCountTable();
+    return { data: [], error: null };
+  }
+  const { data, error } = await supabaseClient
+    .from(TABLE_NAME)
+    .select("*")
+    .eq("user_id", state.user.id);
+
+  if (error) {
+    if (showError) {
+      pushMessage("error", `Erro ao carregar itens do usuario: ${error.message}`);
+    }
+    return { data: null, error };
+  }
+
+  state.userRows = (data || []).map((row) => hydrateInventoryRow(row));
+  updateLastUpdateFromRows(state.userRows, "count");
+  renderCountTable();
+  return { data: state.userRows, error: null };
+}
+
+// Um mesmo tipo pode estar gravado no banco com um valor legado (ex: 601
+// antes de virar 14, para o 6A do ORANGE) — busca por todos os valores
+// possiveis para nao criar um registro duplicado nem falhar em achar o atual.
+function buildTipoSearchValues(produto, tipo) {
+  const variant = getSpecialTipoVariantByValue(produto, tipo);
+  if (!variant) return [tipo];
+  return [variant.value, ...(variant.legacyValues || [])];
+}
+
+export async function upsertRecord({
+  setor,
+  produto,
+  marca,
+  tipo,
+  caixas_pallet,
+  palletsDelta = 1,
+  caixasAvulsasDelta = 0,
+}) {
+  if (!state.user) return false;
+  const { data: existing, error: selectError } = await supabaseClient
+    .from(TABLE_NAME)
+    .select("*")
+    .eq("user_id", state.user.id)
+    .eq("setor", setor)
+    .eq("produto", produto)
+    .eq("marca", marca)
+    .in("tipo", buildTipoSearchValues(produto, tipo))
+    .maybeSingle();
+
+  if (selectError) {
+    pushMessage("error", `Erro ao consultar registro: ${selectError.message}`);
+    return false;
+  }
+
+  if (existing) {
+    const current = hydrateInventoryRow(existing);
+    const updated = hydrateInventoryRow(current, {
+      caixas_pallet: caixas_pallet ?? current.caixas_pallet,
+      pallets: current.pallets + toNonNegativeInt(palletsDelta, 0),
+      caixas_avulsas:
+        current.caixas_avulsas + toNonNegativeInt(caixasAvulsasDelta, 0),
+    });
+    const payload = buildDbRowPayload(
+      updated,
+      false,
+      Object.prototype.hasOwnProperty.call(existing || {}, "caixas_avulsas") ||
+      updated.caixas_avulsas > 0 ||
+      toNonNegativeInt(caixasAvulsasDelta, 0) > 0
+    );
+    const { error } = await supabaseClient
+      .from(TABLE_NAME)
+      .update(payload)
+      .eq("id", existing.id);
+
+    if (error) {
+      const message = isLooseBoxesSchemaError(error)
+        ? "Erro ao atualizar registro: rode a migracao de caixas avulsas no Supabase."
+        : `Erro ao atualizar registro: ${error.message}`;
+      pushMessage("error", message);
+      return false;
+    }
+  } else {
+    const newRow = hydrateInventoryRow({
+      user_id: state.user.id,
+      setor,
+      produto,
+      marca,
+      tipo,
+      caixas_pallet,
+      pallets: palletsDelta,
+      caixas_avulsas: caixasAvulsasDelta,
+    });
+    const { error } = await supabaseClient
+      .from(TABLE_NAME)
+      .insert(buildDbRowPayload(newRow, true));
+
+    if (error) {
+      const message = isLooseBoxesSchemaError(error)
+        ? "Erro ao salvar registro: rode a migracao de caixas avulsas no Supabase."
+        : `Erro ao salvar registro: ${error.message}`;
+      pushMessage("error", message);
+      return false;
+    }
+  }
+  return true;
+}
+
+export async function probeSupabase() {
+  try {
+    const response = await fetchWithTimeout(
+      `${SUPABASE_URL}/rest/v1/`,
+      {
+        method: "GET",
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+      },
+      8000
+    );
+    return {
+      ok: response.ok,
+      status: response.status,
+      statusText: response.statusText,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error?.message || String(error),
+    };
+  }
+}

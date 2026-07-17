@@ -300,3 +300,5 @@ Ao publicar mudancas de assets:
 
 - `MANUTENCAO.md`: mapa tecnico rapido das funcoes e fluxos internos.
 
+#   f r u t a m i n a - p r o j e t o - e s t o q u e v 3  
+ 

@@ -373,6 +373,42 @@ body.sidebar-open .sidebar .sidebar-footer .user-chip {
   grid-template-columns: 160px 1fr;
 }
 
+.catalog-form-grid input,
+.catalog-form-grid select {
+  max-width: 320px;
+}
+
+.catalog-list-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.catalog-list-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.icon-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.catalog-checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
 .catalog-checkbox {
   display: inline-flex;
   align-items: center;
