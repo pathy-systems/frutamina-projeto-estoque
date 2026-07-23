@@ -91,6 +91,11 @@ function setCountMode(mode) {
   renderCountTable();
 }
 
+// Trava contra clique duplo/comando "salvar" repetido: sem isso, duas
+// chamadas concorrentes de saveNewCount inserem a mesma contagem 2x antes de
+// qualquer uma delas apagar os registros antigos, duplicando o estoque.
+let isSavingCount = false;
+
 /**
  * Finaliza a nova contagem:
  * - substitui os registros antigos do usuário;
@@ -99,6 +104,10 @@ function setCountMode(mode) {
  */
 export async function saveNewCount() {
   if (!requireAuthenticatedUser("Faça login para salvar a nova contagem.")) {
+    return;
+  }
+  if (isSavingCount) {
+    pushMessage("warn", "Aguarde, a nova contagem ja esta sendo salva...");
     return;
   }
   if (!state.sessionRows.length) {
@@ -128,14 +137,23 @@ export async function saveNewCount() {
   );
   if (!confirmed) return;
 
+  isSavingCount = true;
+  if (elements.saveNewCountBtn) elements.saveNewCountBtn.disabled = true;
   try {
-    // Le os ids atuais do usuario ANTES de inserir a nova contagem, para so
-    // apagar exatamente esses depois (e nunca os que acabamos de inserir).
+    // Le os ids atuais de TODOS os usuarios para os setores desta contagem
+    // (nao so os do usuario atual) ANTES de inserir a nova contagem, para so
+    // apagar exatamente esses depois. Uma nova contagem de um setor e a
+    // contagem oficial e completa daquele setor, nao importa quem contou
+    // antes — senao a contagem de um operador diferente do mesmo setor fica
+    // apenas somada por cima da anterior, duplicando o estoque.
     // Inserir primeiro e apagar por ultimo evita que uma sessao expirando ou
     // uma falha de rede no meio do caminho deixe o estoque do usuario
     // zerado no servidor: na pior das hipoteses sobra duplicata (recuperavel).
+    const setoresContados = Array.from(
+      new Set(currentRows.map((row) => row.setor).filter(Boolean))
+    );
     const { data: existingRows, error: selectError } = await withTimeout(
-      supabaseClient.from(TABLE_NAME).select("id").eq("user_id", state.user.id),
+      supabaseClient.from(TABLE_NAME).select("id").in("setor", setoresContados),
       SUPABASE_TIMEOUT_MS,
       "Tempo limite ao verificar a contagem atual."
     );
@@ -234,6 +252,9 @@ export async function saveNewCount() {
       `${error?.message || "Erro ao sincronizar a nova contagem."} O rascunho offline foi mantido neste aparelho.`
     );
     saveCountDraftLocally();
+  } finally {
+    isSavingCount = false;
+    if (elements.saveNewCountBtn) elements.saveNewCountBtn.disabled = false;
   }
 }
 
