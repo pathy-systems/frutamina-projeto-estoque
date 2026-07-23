@@ -71,7 +71,7 @@ function showCountPanel() {
     elements.countPanel.classList.remove("hidden");
     elements.countPanel.scrollIntoView({ behavior: "smooth" });
   }
-  setEditSection(state.editSection || "stock");
+  setEditSection();
 }
 
 function showProductsPanel() {
@@ -192,41 +192,11 @@ export function setupTheme() {
   }
 }
 
-export function setEditSection(section) {
+function setEditSection() {
   if (!state.user && isRestrictedPageMode()) {
     lockRestrictedAccess("Faça login para acessar esta área.");
     return;
   }
-
-  const nextSection = section === "products" ? "products" : "stock";
-  state.editSection = nextSection;
-  const isProducts = nextSection === "products";
-
-  if (elements.sectionStockBtn && elements.sectionProductsBtn) {
-    elements.sectionStockBtn.classList.toggle("primary", !isProducts);
-    elements.sectionStockBtn.classList.toggle("ghost", isProducts);
-    elements.sectionProductsBtn.classList.toggle("primary", isProducts);
-    elements.sectionProductsBtn.classList.toggle("ghost", !isProducts);
-    elements.sectionStockBtn.setAttribute("aria-pressed", isProducts ? "false" : "true");
-    elements.sectionProductsBtn.setAttribute("aria-pressed", isProducts ? "true" : "false");
-  }
-
-  if (elements.countModeBar) {
-    elements.countModeBar.classList.toggle("hidden", isProducts);
-  }
-  if (elements.voiceCard) {
-    elements.voiceCard.classList.toggle("hidden", isProducts);
-  }
-  if (elements.manualCard) {
-    elements.manualCard.classList.toggle("hidden", isProducts);
-  }
-  if (elements.countItemsCard) {
-    elements.countItemsCard.classList.toggle("hidden", isProducts);
-  }
-  if (elements.catalogCard) {
-    elements.catalogCard.classList.toggle("hidden", !isProducts);
-  }
-
   renderCountSyncStatus();
 }
 
@@ -259,7 +229,7 @@ export async function enforceSessionLimit() {
 }
 
 // Sincroniza estado de login da interface com a sessao atual do Supabase.
-export async function handleAuthState(event, session) {
+async function handleAuthState(event, session) {
   state.user = session?.user ?? null;
   if (state.user) {
     if (event === "SIGNED_IN") {
@@ -291,7 +261,7 @@ export async function handleAuthState(event, session) {
       updateCountModeUI();
       await loadUserRecords();
       await restoreCountDraftForCurrentUser();
-      setEditSection(state.editSection || "stock");
+      setEditSection();
     } else if (PAGE_MODE === "products") {
       hideAuthPanel();
       showProductsPanel();
@@ -316,7 +286,6 @@ export async function handleAuthState(event, session) {
       state.userRows = [];
       state.sessionRows = [];
       state.countMode = "current";
-      state.editSection = "stock";
       state.countDraftSavedAt = null;
       state.countDraftHash = "";
       renderCountTable();
@@ -470,18 +439,6 @@ export function setupShellEvents() {
       setSidebarOpen(false);
     }
   });
-
-  if (elements.sectionStockBtn) {
-    elements.sectionStockBtn.addEventListener("click", () => {
-      setEditSection("stock");
-    });
-  }
-
-  if (elements.sectionProductsBtn) {
-    elements.sectionProductsBtn.addEventListener("click", () => {
-      setEditSection("products");
-    });
-  }
 
   if (elements.menuLogout) {
     elements.menuLogout.addEventListener("click", async () => {

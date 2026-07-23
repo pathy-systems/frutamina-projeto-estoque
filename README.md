@@ -39,10 +39,11 @@ Fluxo principal:
     - `Nova contagem` (rascunho local com sincronização posterior).
 
 - **Visão Geral (`visao-geral.html`)**
-  - gráfico de total de caixas;
-  - gráfico de caixas que saíram;
-  - filtros de período: `1D`, `5D`, `1M`, `6M`, `1Y`, `5Y`, `MAX`;
-  - relatório detalhado da última comparação salva.
+  - total de caixas e pallets, produtos/marcas distintos;
+  - distribuição por setor e por marca;
+  - top produtos por volume;
+  - alertas de estoque baixo/próximo do mínimo;
+  - histórico de contagens com a saída de caixas de cada uma.
 
 - **PWA**
   - manifesto (`manifest.webmanifest`);
@@ -61,11 +62,12 @@ Fluxo principal:
 ```text
 projeto-estoque/
 |- assets/
-|  |- app.js
+|  |- js/       (modulos ES; ver MANUTENCAO.md)
 |  `- img/
 |- index.html
 |- editar.html
 |- visao-geral.html
+|- produtos.html
 |- styles.css
 |- service-worker.js
 |- manifest.webmanifest
@@ -130,7 +132,7 @@ Entao, no Supabase Auth, os usuarios devem existir com esse padrao de e-mail (ou
 ## Regras de Negocio Importantes
 
 - Setores principais: `CHAO`, `GELADEIRA`, `ITAUEIRA`.
-- Configuracao de produto/marca/caixas por pallet fica em `CONFIG_GERAL` (`assets/app.js`).
+- Configuracao de produto/marca/caixas por pallet fica em `CONFIG_GERAL` (`assets/js/config.js`); cadastros feitos por usuarios em `produtos.html` ficam na tabela `catalog_overrides` do Supabase e sao aplicados por cima disso.
 - Tipos validos padrao: de `3` a `15`.
 - Produto sem tipo:
   - `PIMENTAO` usa tipo interno `0` e exibicao `S/T`.
@@ -187,8 +189,6 @@ Se estiver offline no modo nova contagem, o rascunho e preservado e sincronizado
   - fallback em falha de leitura do servidor.
 - Rascunho nova contagem:
   - chave prefixada `cd_count_draft_v1`.
-- Comparacao mais recente:
-  - chave `cd_last_comparison_v1`.
 - Sessao local:
   - timestamp `cd_login_at` com limite de 1 hora (`SESSION_MAX_MS`).
 
@@ -201,16 +201,17 @@ Se estiver offline no modo nova contagem, o rascunho e preservado e sincronizado
 
 ## Dashboard
 
-Origem dos dados:
-
-- se existem snapshots: usa `estoque_snapshots`;
-- senao: calcula serie temporal com dados vivos (`estoque_registros`).
+Fonte dos dados: estoque público atual (`estoque_registros`) para os totais/top
+produtos/alertas, e `estoque_snapshots` para o histórico de contagens (cada
+snapshot guarda o `outflow_caixas` calculado no momento em que a contagem foi
+salva).
 
 Indicadores:
 
-- total de caixas no periodo;
-- variacao percentual no periodo;
-- soma e pico de saida de caixas.
+- total de caixas e pallets, com variação em relação à contagem anterior;
+- produtos/marcas distintos cadastrados;
+- quantidade de itens abaixo/próximo do estoque mínimo;
+- histórico das últimas contagens com quem operou e quanto saiu em cada uma.
 
 ## Executando Localmente
 
@@ -223,7 +224,7 @@ Indicadores:
 
 ### 2) Ajustar credenciais Supabase (se necessario)
 
-No arquivo `assets/app.js`, revise:
+No arquivo `assets/js/config.js`, revise:
 
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
@@ -257,7 +258,7 @@ Para microfone e PWA em producao, use HTTPS.
 
 Editar principalmente:
 
-- `CONFIG_GERAL` em `assets/app.js`.
+- `CONFIG_GERAL` em `assets/js/config.js` (regras fixas) ou o cadastro em `produtos.html` (regras que o proprio usuario deve poder gerenciar, salvas em `catalog_overrides` no Supabase).
 
 Depois validar:
 

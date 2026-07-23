@@ -9,7 +9,7 @@ import {
 } from "./config.js";
 import { elements } from "./state.js";
 
-export function toInt(value, fallback = 0) {
+function toInt(value, fallback = 0) {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
@@ -86,7 +86,7 @@ export function buildNormalizedMap(values) {
   return map;
 }
 
-export function containsTokenSequence(tokens, sequence) {
+function containsTokenSequence(tokens, sequence) {
   if (!sequence.length || tokens.length < sequence.length) return false;
   for (let i = 0; i <= tokens.length - sequence.length; i += 1) {
     let match = true;
@@ -154,11 +154,11 @@ export function isNoTipoContext(produto, marca) {
   return isNoTipoProduct(produto);
 }
 
-export function isTipoValid(tipo) {
+function isTipoValid(tipo) {
   return Number.isFinite(tipo) && tipo >= TIPO_MIN && tipo <= TIPO_MAX;
 }
 
-export function getSpecialTipoVariants(produto) {
+function getSpecialTipoVariants(produto) {
   if (!produto) return [];
   return SPECIAL_TIPO_VARIANTS[normalizeText(produto)] || [];
 }
@@ -189,7 +189,7 @@ export function isSpecialTipoVariantValue(produto, tipo) {
   return Boolean(getSpecialTipoVariantByValue(produto, tipo));
 }
 
-export function isSplitTipoBase(produto, tipo) {
+function isSplitTipoBase(produto, tipo) {
   const numericTipo = Number.parseInt(tipo, 10);
   if (!Number.isFinite(numericTipo)) return false;
   return getSpecialTipoVariants(produto).some(
@@ -245,7 +245,7 @@ export function buildTipoOptionList(produto) {
   return options;
 }
 
-export function getSpecialTipoLabel(produto, tipo) {
+function getSpecialTipoLabel(produto, tipo) {
   return getSpecialTipoVariantByValue(produto, tipo)?.label || null;
 }
 
@@ -279,6 +279,10 @@ export function formatTipoLabelValue(produto, tipo, marca = "") {
 }
 
 export function parseTipoInputValue(value, produto) {
+  // normalizeText descarta o "-", entao um sinal negativo e detectado antes
+  // de normalizar para que "-5" seja rejeitado na validacao (< TIPO_MIN) em
+  // vez de virar silenciosamente "5".
+  const isNegative = /^-/.test(String(value || "").trim());
   const normalizedValue = normalizeText(value);
   if (!normalizedValue) return null;
 
@@ -291,7 +295,8 @@ export function parseTipoInputValue(value, produto) {
   }
 
   const numericTipo = Number.parseInt(normalizedValue, 10);
-  return Number.isFinite(numericTipo) ? numericTipo : null;
+  if (!Number.isFinite(numericTipo)) return null;
+  return isNegative ? -numericTipo : numericTipo;
 }
 
 export function listProductsBySetor(setor) {

@@ -3,7 +3,6 @@ import { state, elements, PAGE_MODE } from "./state.js";
 import { toNonNegativeInt, formatNumber, formatPercent, formatTipoLabelValue } from "./utils.js";
 import { aggregateRows, hydrateInventoryRow, getCurrentPublicAggregateRows } from "./inventory-core.js";
 import { getTotalCaixas, formatUserLabel, formatDateTime } from "./tables.js";
-import { loadComparisonReport } from "./comparison.js";
 
 const RANGE_PRESETS = {
   "1D": { unit: "hour", size: 24, label: "ultimas 24h" },
@@ -1024,7 +1023,6 @@ function attachChartHover(canvas, tooltip, key) {
 
 export function setupDashboard() {
   if (PAGE_MODE !== "dashboard") return;
-  loadComparisonReport();
   if (elements.ovTotalCaixas) {
     renderDashboardOverview();
     return;

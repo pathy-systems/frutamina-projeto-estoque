@@ -7,167 +7,154 @@ Este projeto foi documentado em duas camadas:
 
 ## Estrutura do projeto
 
-- `C:\Users\USER\Desktop\projeto-estoque\index.html`
+- `index.html`
   Página pública de estoque. Mostra a tabela detalhada e a tabela-resumo.
 
-- `C:\Users\USER\Desktop\projeto-estoque\editar.html`
+- `editar.html`
   Página de operação. Concentra login, voz, formulário manual, nova contagem e sincronização.
 
-- `C:\Users\USER\Desktop\projeto-estoque\visao-geral.html`
-  Dashboard com total de caixas, saída de caixas e comparação da última contagem.
+- `visao-geral.html`
+  Dashboard com total de caixas, saída de caixas e overview por setor/marca.
 
-- `C:\Users\USER\Desktop\projeto-estoque\assets\app.js`
-  Arquivo central do sistema. Quase toda a regra de negócio está aqui.
+- `produtos.html`
+  Cadastro de produtos/marcas/caixas por pallet (catálogo global, salvo no Supabase).
 
-- `C:\Users\USER\Desktop\projeto-estoque\styles.css`
-  Estilos compartilhados entre as três páginas.
+- `assets/js/`
+  Todo o código do sistema, dividido em módulos ES nativos (`import`/`export`, sem bundler).
+  Cada página carrega um entry point próprio (`main-view.js`, `main-edit.js`,
+  `main-dashboard.js`, `main-products.js`), que só importa os módulos que aquela
+  página realmente usa. Ver "Mapa de módulos" abaixo.
 
-- `C:\Users\USER\Desktop\projeto-estoque\manifest.webmanifest`
+- `styles.css`
+  Estilos compartilhados entre as quatro páginas.
+
+- `manifest.webmanifest`
   Configuração do PWA instalado no celular.
 
-- `C:\Users\USER\Desktop\projeto-estoque\service-worker.js`
-  Cache offline do shell do app.
+- `service-worker.js`
+  Cache offline do shell do app (HTML/CSS/módulos JS listados em `APP_SHELL`).
 
-- `C:\Users\USER\Desktop\projeto-estoque\supabase-completo.sql`
+- `supabase-completo.sql`
   Script principal de estrutura do banco.
 
-- `C:\Users\USER\Desktop\projeto-estoque\supabase-caixas-avulsas.sql`
+- `supabase-caixas-avulsas.sql`
   Migração da funcionalidade de caixas avulsas.
 
-- `C:\Users\USER\Desktop\projeto-estoque\supabase-dashboard-migracao.sql`
+- `supabase-dashboard-migracao.sql`
   Migração do campo `outflow_caixas` usado no dashboard.
 
-## Mapa de blocos do `app.js`
+> Nota: a tabela `catalog_overrides` (catálogo de produtos cadastrados pelos
+> usuários) ainda não tem um script `.sql` próprio nesta pasta — foi criada
+> manualmente no Supabase. Ver estrutura em `assets/js/catalog-overrides.js`.
+
+## Mapa de módulos (`assets/js/`)
 
 ### 1. Configuração e regras de negócio
 
-- `CONFIG_GERAL`
-  Define setores, produtos, marcas e a função que calcula `caixas_pallet`.
+- `config.js`
+  - `CONFIG_GERAL`: define setores, produtos, marcas e a função que calcula `caixas_pallet`.
+  - `SPECIAL_TIPO_VARIANTS`: tipos que não aparecem como número puro. Hoje o caso
+    especial é `ORANGE`, com `6A` (valor interno `14`) e `6B` (valor interno `15`).
+    Cada variante guarda `legacyValues` (ex.: `601`/`602`) só para reconhecer linhas
+    antigas já gravadas no banco antes da migração para `14`/`15` — nada volta a
+    gravar esses valores legados.
+  - `NO_TIPO_PRODUCTS`: produtos que não usam tipo (hoje, `PIMENTÃO`).
+  - Constantes de tabelas/chaves de `localStorage` usadas pelo resto dos módulos.
 
-- `SPECIAL_TIPO_VARIANTS`
-  Guarda tipos especiais que não aparecem como número puro.
-  Hoje o caso especial é `ORANGE`, com:
-  - `6A` salvo internamente como `14`
-  - `6B` salvo internamente como `15`
-
-- `NO_TIPO_PRODUCTS`
-  Lista produtos que não usam tipo.
-  Hoje o principal caso é `PIMENTÃO`.
+- `catalog-overrides.js`
+  Carrega do Supabase (tabela `catalog_overrides`) os produtos/marcas cadastrados
+  ou removidos pelos usuários e aplica isso por cima de `CONFIG_GERAL` antes de
+  qualquer parsing. Roda no boot de todas as páginas — é o que faz um produto
+  cadastrado em `produtos.html` aparecer no parser de voz/manual de `editar.html`.
+  `localStorage` aqui é só um cache de leitura para quando o Supabase falha, não
+  a fonte de verdade.
 
 ### 2. Utilitários de inventário
 
-- `normalizeInventoryMetrics`
-  Função mais importante das métricas. Mantém pallets, caixas avulsas e total coerentes.
-
-- `hydrateInventoryRow`
-  Garante que qualquer linha lida do banco ou do rascunho fique normalizada.
-
-- `applyInventoryDeltas`
-  Soma pallets/caixas em um item já existente.
+- `inventory-core.js`
+  - `normalizeInventoryMetrics`: mantém pallets, caixas avulsas e total coerentes.
+  - `hydrateInventoryRow`: normaliza qualquer linha lida do banco ou do rascunho.
+  - `applyInventoryDeltas`: soma pallets/caixas em um item já existente.
+  - `aggregateRows`: agrupa itens iguais.
 
 ### 3. Desfazer e corrigir último lançamento
 
-- `buildLaunchItem`
-- `buildLaunchRecord`
-- `revertLaunchRecord`
-- `removeLastLaunchCommand`
-- `beginVoiceCorrection`
-- `handlePendingCorrection`
+- `voice-actions.js`
+  - `registerInventoryChange`, `buildLaunchItem`, `buildLaunchRecord`
+  - `revertLaunchRecord`, `removeLastLaunchCommand`
+  - `beginVoiceCorrection`, `handlePendingCorrection`
 
-Essas funções sustentam os comandos de voz:
-- `REMOVER`
-- `CORRIGIR`
+  Essas funções sustentam os comandos de voz `REMOVER` e `CORRIGIR`.
 
 ### 4. Linguagem e parser da voz
 
-- `normalizeText`
-  Normaliza a transcrição da fala.
-  Exemplos:
-  - `CEP` -> `CEPI`
-  - `BRASIL` -> `BRAZIL`
-  - `ORANAGE` -> `ORANGE`
-
-- `extractCommandNumbers`
-  Extrai números do comando ignorando setor/produto/marca já reconhecidos.
-
-- `extractSpecialTipoSequence`
-  Detecta tipos especiais como `SEIS A` e `SEIS B`.
-
-- `processCommand`
-  Coração da automação por voz. Decide:
-  - travas de contexto;
-  - tipo;
-  - quantidade;
-  - remoção/correção;
-  - gravação final.
+- `utils.js`: `normalizeText`/`tokenizeText` normalizam a transcrição da fala
+  (ex.: `CEP` -> `CEPI`, `BRASIL` -> `BRAZIL`, `ORANAGE` -> `ORANGE`).
+- `voice-actions.js`: `processCommand` é o coração da automação por voz/texto —
+  decide travas de contexto, tipo, quantidade, remoção/correção e gravação final.
+  `extractCommandNumbers`/`extractCommandTipoValues` extraem números e tipos do
+  comando ignorando setor/produto/marca já reconhecidos.
+- `voice-speech.js`: `setupVoice`, integração real com a Web Speech API (só usado
+  em `editar.html`).
 
 ### 5. Rascunho offline
 
-- `saveCountDraftLocally`
-- `restoreCountDraftForCurrentUser`
-- `clearCountDraft`
-- `renderCountSyncStatus`
+- `draft.js`: `saveCountDraftLocally`, `restoreCountDraftForCurrentUser`, `clearCountDraft`.
+- `tables.js`: `renderCountSyncStatus` (mostra o status de sincronização na tela).
 
-Essas funcoes permitem continuar a nova contagem sem internet.
+Essas funções permitem continuar a nova contagem sem internet.
 
-### 6. Agregação, comparação e saída
+### 6. Saída entre contagens
 
-- `aggregateRows`
-  Agrupa itens iguais.
+- `comparison.js`
+  - `calculateOutflowCaixas`: soma quantas caixas saíram no total.
+  - `buildPublicRowsAfterUserReplacement`: reconstrói o estoque público "após
+    salvar" sem depender de uma nova leitura do servidor.
 
-- `calculateOutflowCaixas`
-  Soma quantas caixas saíram no total.
-
-- `buildComparisonReport`
-  Gera a lista detalhada do que saiu por item.
-
-- `saveComparisonReport`
-- `loadComparisonReport`
-- `renderComparisonReport`
-
-Essas funções alimentam o card de comparação da página `Visão geral`.
+  Alimentam o `outflow_caixas` salvo no snapshot (`count-mode.js`), que aparece
+  no histórico da `Visão geral`. Não existe mais uma tela de comparação item a
+  item — essa parte (`buildComparisonReport`/`renderComparisonReport`) foi
+  removida por não ter nenhum elemento de UI conectado.
 
 ### 7. Dashboard
 
-- `buildSnapshotSeries`
-- `buildSnapshotEventSeries`
-- `buildDashboardSeries`
-- `renderDashboard`
-
-Controlam os gráficos de total do CD e saída de caixas.
+- `dashboard.js`
+  - `buildDashboardOverviewData`, `renderDashboardOverview`: overview atual da
+    `Visão geral` (total de caixas/pallets, top produtos, alertas de estoque
+    baixo, histórico, gráfico de marcas).
+  - `buildSnapshotSeries`, `buildDashboardSeries`, `renderDashboard`: gráfico de
+    linha mais antigo (total/saída por período). Só roda se a página tiver os
+    elementos `#chart-total`/`#chart-outflow` — hoje nenhuma tem, então esse
+    caminho fica inativo. Mantido de propósito para uma eventual reativação
+    (não mexer sem confirmar antes).
 
 ### 8. Supabase
 
-- `loadPublicRecords`
-- `loadUserRecords`
-- `upsertRecord`
-- `saveSnapshotRecord`
-- `saveNewCount`
-
-Essas funcoes fazem leitura e escrita no banco.
+- `supabase-api.js`: `loadPublicRecords`, `loadUserRecords`, `upsertRecord`, `saveSnapshotRecord`.
+- `count-mode.js`: `saveNewCount` (sincroniza a nova contagem inteira de uma vez).
 
 ### 9. Formulário manual e edição
 
-- `updateManualTipoOptions`
-  Monta os tipos disponíveis conforme setor/produto/marca.
-  Exemplo:
-  - `ORANGE` mostra `6A` e `6B`
-  - `PIMENTÃO` mostra `S/T`
+- `manual-form.js`
+  - `updateManualTipoOptions`: monta os tipos disponíveis conforme setor/produto/marca
+    (ex.: `ORANGE` mostra `6A`/`6B`, `PIMENTÃO` mostra `S/T`).
+  - `getManualCaixasPallet`, `addManualItem`, `openEditModal`, `saveEditItem`, `removeRow`.
 
-- `getManualCaixasPallet`
-- `addManualItem`
-- `openEditModal`
-- `saveEditItem`
-- `removeRow`
+### 10. Catálogo de produtos
 
-### 10. Bootstrap
+- `catalog-crud.js`: CRUD do cadastro de produtos em `produtos.html` — modal de
+  cadastro, modal de confirmação, remoção e "restaurar catálogo original". Toda
+  gravação/remoção vai para a tabela `catalog_overrides` no Supabase (visível
+  para todos os usuários, não só quem cadastrou).
+- `catalog-overrides.js`: ver seção 1.
 
-- `setupEvents`
-- `handleAuthState`
-- `setupAuth`
-- `initSetorSelects`
+### 11. Bootstrap
 
-São as funções que conectam o DOM com a regra de negócio.
+- `auth-ui.js`: `setupAuth`, `handleAuthState`, `setupShellEvents`, `setupTheme`,
+  `initSetorSelects`, notificações push. Roda em todas as páginas.
+- `main-view.js` / `main-edit.js` / `main-dashboard.js` / `main-products.js`:
+  um entry point por página — cada um só importa e inicializa os módulos que
+  aquela página usa.
 
 ## Fluxos principais
 
@@ -175,44 +162,62 @@ São as funções que conectam o DOM com a regra de negócio.
 
 1. `loadPublicRecords` carrega a tabela pública.
 2. `loadUserRecords` carrega a contagem do usuário logado.
-3. `renderPublicTable` e `renderCountTable` atualizam a tela.
+3. `renderPublicTable` e `renderCountTable` (`tables.js`) atualizam a tela.
 
 ### Fluxo 2: nova contagem offline
 
-1. `setCountMode("new")` inicia a nova contagem.
+1. `setCountMode("new")` (`count-mode.js`) inicia a nova contagem.
 2. os lançamentos entram em `state.sessionRows`.
-3. `saveCountDraftLocally` protege o rascunho no aparelho.
-4. `saveNewCount` sincroniza tudo de uma vez com o Supabase.
+3. `saveCountDraftLocally` (`draft.js`) protege o rascunho no aparelho.
+4. `saveNewCount` (`count-mode.js`) sincroniza tudo de uma vez com o Supabase.
 
 ### Fluxo 3: voz
 
-1. `setupVoice` liga a Web Speech API.
-2. `processCommand` interpreta o texto final.
+1. `setupVoice` (`voice-speech.js`) liga a Web Speech API.
+2. `processCommand` (`voice-actions.js`) interpreta o texto final.
 3. `registerInventoryChange` aplica o lançamento.
-4. `upsertRecord` salva no banco quando necessário.
+4. `upsertRecord` (`supabase-api.js`) salva no banco quando necessário.
 
-### Fluxo 4: comparação de saída
+### Fluxo 4: saída entre contagens
 
-1. ao salvar nova contagem, o sistema separa:
-   - contagem anterior
-   - contagem atual
-2. `buildComparisonReport` calcula item a item o que saiu.
-3. `renderComparisonReport` mostra isso na `Visão geral`.
+1. ao salvar nova contagem (`saveNewCount`), o sistema separa contagem anterior e atual.
+2. `calculateOutflowCaixas` (`comparison.js`) soma o total que saiu.
+3. `saveSnapshotRecord` (`supabase-api.js`) grava o snapshot com `outflow_caixas`.
+4. `renderDashboardOverview` (`dashboard.js`) mostra isso no histórico da `Visão geral`.
+
+### Fluxo 5: cadastro de produto (catálogo global)
+
+1. usuário cadastra/remove um produto em `produtos.html` (`catalog-crud.js`).
+2. a gravação vai direto para a tabela `catalog_overrides` no Supabase.
+3. `catalog-overrides.js` recarrega os overrides e reaplica sobre `CONFIG_GERAL`
+   em qualquer página, para qualquer usuário logado.
 
 ## Regras especiais atuais
 
-- `PIMENTÃO` usa `S/T`
-- marcas com `14Kg` continuam sendo marcas normais, não tipo
-- `ORANGE` usa tipos especiais:
-  - `6A`
-  - `6B`
+- `PIMENTÃO` usa `S/T`.
+- marcas com `14Kg` continuam sendo marcas normais, não tipo.
+- `ORANGE` usa tipos especiais: `6A` (interno `14`) e `6B` (interno `15`).
+- catálogo de produtos pode ter caixas/pallet variando por faixa de tipo
+  (ex.: tipo ≤ 6 usa um valor, tipo > 6 usa outro) — configurado no cadastro
+  em `produtos.html`, colunas `tipo_min`/`tipo_max`/`caixas_pallet_in_range`.
 
 ## Dica de manutenção
 
 Quando precisar alterar alguma regra de negócio, siga esta ordem:
 
-1. ajuste `CONFIG_GERAL` se a mudança for de produto/marca/caixas por pallet;
-2. ajuste parser de voz em `normalizeText`, `extractCommandNumbers` ou `processCommand`;
-3. ajuste formulário manual em `updateManualTipoOptions` e `addManualItem`;
-4. ajuste exibição em `formatTipoLabelValue`, tabelas e resumo;
-5. se houver persistência nova, revise as funções do Supabase.
+1. ajuste `CONFIG_GERAL` (`config.js`) se a mudança for de produto/marca/caixas
+   por pallet fixo, ou use o cadastro em `produtos.html` se for algo que os
+   usuários devem poder gerenciar sozinhos;
+2. ajuste parser de voz em `normalizeText` (`utils.js`), `extractCommandNumbers`
+   ou `processCommand` (`voice-actions.js`);
+3. ajuste formulário manual em `updateManualTipoOptions` e `addManualItem`
+   (`manual-form.js`);
+4. ajuste exibição em `formatTipoLabelValue` (`utils.js`), tabelas (`tables.js`)
+   e dashboard (`dashboard.js`);
+5. se houver persistência nova, revise as funções do Supabase (`supabase-api.js`,
+   `catalog-overrides.js`).
+
+Depois de qualquer mudança em `assets/js/*.js` ou `styles.css`, incremente os
+query params `?v=...` nos `<link>`/`<script>` das 4 páginas HTML (cache-busting
+do GitHub Pages) e, se algum arquivo do `APP_SHELL` mudou, também as versões de
+cache em `service-worker.js`.

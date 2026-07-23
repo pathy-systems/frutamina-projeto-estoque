@@ -10,7 +10,6 @@ export const SUPABASE_TIMEOUT_MS = 45000;
 export const PUBLIC_CACHE_KEY = "cd_public_cache";
 export const PUBLIC_CACHE_AT_KEY = "cd_public_cache_at";
 export const COUNT_DRAFT_KEY_PREFIX = "cd_count_draft_v1";
-export const LAST_COMPARISON_KEY = "cd_last_comparison_v1";
 export const CATALOG_ADDITIONS_KEY = "cd_catalog_additions_v1";
 export const CATALOG_REMOVALS_KEY = "cd_catalog_removals_v1";
 export const THEME_PREFERENCE_KEY = "cd_theme_preference_v1";
@@ -168,9 +167,9 @@ export const BOX_KEYWORDS = new Set([
 
 export const REMOVE_KEYWORDS = new Set(["REMOVER", "REMOVA", "DESFAZER"]);
 export const CORRECT_KEYWORDS = new Set(["CORRIGIR", "CORRIGE", "CORRECAO"]);
-export const LAUNCH_KEYWORDS = new Set(["LANCAR", "LANÇAR", "LANÇAR ESTOQUE", "LANCAR ESTOQUE"]);
+export const LAUNCH_KEYWORDS = new Set(["LANCAR"]);
 export const SAVE_KEYWORDS = new Set(["SALVAR", "ENVIAR", "PUBLICAR"]);
-export const DISCARD_KEYWORDS = new Set(["DESCARTAR", "DESCARTAR RASCUNHO", "CANCELAR", "CANCELAR RASCUNHO"]);
+export const DISCARD_KEYWORDS = new Set(["DESCARTAR", "CANCELAR"]);
 
 export const BASE_NO_TIPO_PRODUCTS = new Set(["PIMENTAO"]);
 export const NO_TIPO_PRODUCTS = new Set(BASE_NO_TIPO_PRODUCTS);

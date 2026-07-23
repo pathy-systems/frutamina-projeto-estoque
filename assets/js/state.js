@@ -8,7 +8,6 @@ export const state = {
   marca: null,
   tipo: null,
   countMode: "current",
-  editSection: "stock",
   sessionRows: [],
   userRows: [],
   previousCountRows: [],
@@ -45,7 +44,6 @@ export const state = {
     total: null,
     outflow: null,
   },
-  lastComparisonReport: null,
   countDraftSavedAt: null,
   countDraftHash: "",
   catalogAdditions: [],
@@ -104,8 +102,6 @@ export const elements = {
   productsPanel: document.getElementById("products-panel"),
   countSyncBanner: document.getElementById("count-sync-banner"),
   countModeBar: document.getElementById("count-mode-bar"),
-  sectionStockBtn: document.getElementById("section-stock"),
-  sectionProductsBtn: document.getElementById("section-products"),
   countSyncPill: document.getElementById("count-sync-pill"),
   countSyncTitle: document.getElementById("count-sync-title"),
   countSyncText: document.getElementById("count-sync-text"),
@@ -214,8 +210,6 @@ export const elements = {
   chartOutflowChange: document.getElementById("chart-outflow-change"),
   chartOutflowDate: document.getElementById("chart-outflow-date"),
   chartOutflowTooltip: document.getElementById("chart-outflow-tooltip"),
-  comparisonMeta: document.getElementById("comparison-meta"),
-  comparisonBody: document.getElementById("comparison-body"),
   ovTotalCaixas: document.getElementById("ov-total-caixas"),
   ovTotalCaixasMeta: document.getElementById("ov-total-caixas-meta"),
   ovTotalPallets: document.getElementById("ov-total-pallets"),
@@ -234,7 +228,7 @@ export const elements = {
 };
 
 export const PAGE_MODE = document.body?.dataset?.page || "view";
-export const RESTRICTED_PAGE_MODES = new Set(["edit", "products"]);
+const RESTRICTED_PAGE_MODES = new Set(["edit", "products"]);
 
 export function isRestrictedPageMode() {
   return RESTRICTED_PAGE_MODES.has(PAGE_MODE);

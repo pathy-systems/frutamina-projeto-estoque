@@ -166,7 +166,7 @@ function showDebugPanel(result) {
   elements.debugPanel.classList.remove("hidden");
 }
 
-export async function saveEditItem() {
+async function saveEditItem() {
   if (!requireAuthenticatedUser("Faça login para salvar alterações.")) {
     return;
   }
@@ -446,7 +446,7 @@ function updateManualBoxesOptions() {
   }
 }
 
-export function updateManualTipoOptions() {
+function updateManualTipoOptions() {
   if (!elements.manualTipo || !elements.manualProduto || !elements.manualMarca) return;
   const produto = elements.manualProduto.value;
   const marca = elements.manualMarca.value;
@@ -495,7 +495,7 @@ export function updateManualTipoOptions() {
   updateManualBoxesOptions();
 }
 
-export function getManualCaixasPallet() {
+function getManualCaixasPallet() {
   const setor = elements.manualSetor?.value;
   const produto = elements.manualProduto?.value;
   const marca = elements.manualMarca?.value;
@@ -570,7 +570,7 @@ export function updateManualDependencies() {
   updateManualBoxesOptions();
 }
 
-export async function addManualItem() {
+async function addManualItem() {
   if (!requireAuthenticatedUser("Faça login para adicionar itens manualmente.")) {
     return;
   }

@@ -27,7 +27,7 @@ export function formatDateTime(value) {
   }).format(date);
 }
 
-export function formatDate(value) {
+function formatDate(value) {
   if (!value) return "--";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "--";
@@ -38,7 +38,7 @@ export function formatDate(value) {
   }).format(date);
 }
 
-export function formatTime(value) {
+function formatTime(value) {
   if (!value) return "--";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "--";
@@ -169,11 +169,6 @@ export function renderCountSyncStatus() {
   if (!elements.countSyncBanner) return;
 
   if (!state.user) {
-    elements.countSyncBanner.classList.add("hidden");
-    return;
-  }
-
-  if (PAGE_MODE === "edit" && state.editSection === "products") {
     elements.countSyncBanner.classList.add("hidden");
     return;
   }
@@ -558,7 +553,7 @@ export function renderPublicTable() {
   renderPublicSummary();
 }
 
-export function matchesPublicFilters(row) {
+function matchesPublicFilters(row) {
   const { setor, produto, marca, tipo } = state.publicFilters;
   if (setor && row.setor !== setor) return false;
   if (produto && row.produto !== produto) return false;
@@ -643,7 +638,7 @@ export function renderCountTable() {
   }
 }
 
-export function getCountRowsForSetor() {
+function getCountRowsForSetor() {
   const source =
     state.countMode === "new" ? state.sessionRows : state.userRows;
   if (!state.setor) return source;
@@ -685,13 +680,13 @@ export function updateAggregateRecord({
   }
 }
 
-export function openFilterModal() {
+function openFilterModal() {
   if (!elements.filterModal) return;
   buildFilterOptions();
   elements.filterModal.classList.remove("hidden");
 }
 
-export function closeFilterModal() {
+function closeFilterModal() {
   if (!elements.filterModal) return;
   elements.filterModal.classList.add("hidden");
 }

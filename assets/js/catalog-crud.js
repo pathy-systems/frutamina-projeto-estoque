@@ -14,6 +14,7 @@ import {
   resetAllCatalogOverrides,
   normalizeCatalogAdditionEntry,
   sanitizeContextAfterCatalogChange,
+  writeCatalogCache,
 } from "./catalog-overrides.js";
 
 function setMessageIn(target, type, text) {
@@ -223,6 +224,7 @@ async function removeCatalogEntryByKey(entryKey) {
   }
 
   applyCatalogOverridesFromState();
+  writeCatalogCache(state.catalogAdditions, state.catalogRemovals);
   refreshCatalogDependentUI();
   setCatalogListMessage("success", `${parsed.produto} ${parsed.marca} removido do catalogo para todos os usuarios.`);
 }
@@ -281,6 +283,7 @@ async function addCatalogEntryFromForm() {
   state.catalogAdditions.push(addition);
 
   applyCatalogOverridesFromState();
+  writeCatalogCache(state.catalogAdditions, state.catalogRemovals);
   refreshCatalogDependentUI();
 
   elements.catalogProduto.value = "";
@@ -325,6 +328,7 @@ async function resetCatalogOverridesToDefault() {
   state.catalogAdditions = [];
   state.catalogRemovals = [];
   applyCatalogOverridesFromState();
+  writeCatalogCache(state.catalogAdditions, state.catalogRemovals);
   refreshCatalogDependentUI();
   setCatalogListMessage("success", "Catalogo original restaurado para todos os usuarios.");
 }

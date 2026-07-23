@@ -16,7 +16,7 @@ import {
   saveCountDraftLocally,
   clearCountDraft,
 } from "./draft.js";
-import { buildPublicRowsAfterUserReplacement, buildComparisonReport, saveComparisonReport, calculateOutflowCaixas } from "./comparison.js";
+import { buildPublicRowsAfterUserReplacement, calculateOutflowCaixas } from "./comparison.js";
 import { saveSnapshotRecord, loadUserRecords, loadPublicRecords } from "./supabase-api.js";
 import { clearVoiceActionState } from "./voice-actions.js";
 
@@ -50,7 +50,7 @@ export function updateCountModeUI() {
   }
 }
 
-export function setCountMode(mode) {
+function setCountMode(mode) {
   if (!requireAuthenticatedUser("Faça login para alternar o modo de contagem.")) {
     return;
   }
@@ -192,11 +192,6 @@ export async function saveNewCount() {
       previousRows,
       currentRows
     );
-    const comparisonReport = buildComparisonReport(
-      comparisonPreviousRows,
-      currentPublicRows.length ? currentPublicRows : currentRows
-    );
-    saveComparisonReport(comparisonReport);
     const outflowCaixas = calculateOutflowCaixas(
       comparisonPreviousRows,
       currentPublicRows.length ? currentPublicRows : currentRows

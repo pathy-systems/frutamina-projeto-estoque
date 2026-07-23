@@ -34,7 +34,7 @@ function readCatalogCacheArray(key) {
   }
 }
 
-function writeCatalogCache(additions, removals) {
+export function writeCatalogCache(additions, removals) {
   try {
     localStorage.setItem(CATALOG_ADDITIONS_KEY, JSON.stringify(additions));
     localStorage.setItem(CATALOG_REMOVALS_KEY, JSON.stringify(removals));
@@ -199,36 +199,48 @@ function rowToRemoval(row) {
   return normalizeCatalogRemovalEntry(row);
 }
 
+// Os 3 helpers abaixo (upsertCatalogRow/deleteCatalogRow/resetAllCatalogOverrides)
+// sempre devolvem { error } em vez de deixar o timeout/falha de rede do
+// withTimeout rejeitar — senao o await sem try/catch em catalog-crud.js trava
+// o modal na mensagem "Salvando/Removendo/Restaurando..." pra sempre.
 async function upsertCatalogRow(kind, entry, extra = {}) {
-  return withTimeout(
-    supabaseClient.from(CATALOG_TABLE).upsert(
-      {
-        kind,
-        setor: entry.setor,
-        produto: entry.produto,
-        marca: entry.marca,
-        created_by: state.user?.id || null,
-        ...extra,
-      },
-      { onConflict: "kind,setor,produto,marca" }
-    ),
-    SUPABASE_TIMEOUT_MS,
-    "Tempo limite ao salvar o catalogo."
-  );
+  try {
+    return await withTimeout(
+      supabaseClient.from(CATALOG_TABLE).upsert(
+        {
+          kind,
+          setor: entry.setor,
+          produto: entry.produto,
+          marca: entry.marca,
+          created_by: state.user?.id || null,
+          ...extra,
+        },
+        { onConflict: "kind,setor,produto,marca" }
+      ),
+      SUPABASE_TIMEOUT_MS,
+      "Tempo limite ao salvar o catalogo."
+    );
+  } catch (error) {
+    return { error };
+  }
 }
 
 async function deleteCatalogRow(kind, entry) {
-  return withTimeout(
-    supabaseClient
-      .from(CATALOG_TABLE)
-      .delete()
-      .eq("kind", kind)
-      .eq("setor", entry.setor)
-      .eq("produto", entry.produto)
-      .eq("marca", entry.marca),
-    SUPABASE_TIMEOUT_MS,
-    "Tempo limite ao salvar o catalogo."
-  );
+  try {
+    return await withTimeout(
+      supabaseClient
+        .from(CATALOG_TABLE)
+        .delete()
+        .eq("kind", kind)
+        .eq("setor", entry.setor)
+        .eq("produto", entry.produto)
+        .eq("marca", entry.marca),
+      SUPABASE_TIMEOUT_MS,
+      "Tempo limite ao salvar o catalogo."
+    );
+  } catch (error) {
+    return { error };
+  }
 }
 
 // Grava um produto/marca cadastrado (desfaz uma remocao anterior da mesma
@@ -260,11 +272,15 @@ export async function removeCatalogEntry(entry, { markRemoved }) {
 // Apaga TODAS as personalizacoes do catalogo global — usada por
 // resetCatalogOverridesToDefault.
 export async function resetAllCatalogOverrides() {
-  return withTimeout(
-    supabaseClient.from(CATALOG_TABLE).delete().neq("id", 0),
-    SUPABASE_TIMEOUT_MS,
-    "Tempo limite ao restaurar o catalogo."
-  );
+  try {
+    return await withTimeout(
+      supabaseClient.from(CATALOG_TABLE).delete().neq("id", 0),
+      SUPABASE_TIMEOUT_MS,
+      "Tempo limite ao restaurar o catalogo."
+    );
+  } catch (error) {
+    return { error };
+  }
 }
 
 export async function loadCatalogOverrides() {
