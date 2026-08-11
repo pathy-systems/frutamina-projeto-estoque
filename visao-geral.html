@@ -20,7 +20,7 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
     />
-    <link rel="stylesheet" href="styles.css?v=20260423-9" />
+    <link rel="stylesheet" href="styles.css?v=20260423-11" />
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
   <body data-page="dashboard">
@@ -185,10 +185,36 @@
             <div id="ov-brand-grid" class="overview-brand-grid"></div>
           </div>
         </section>
+
+        <section class="overview-card">
+          <div class="overview-card-head">
+            <h2>Histórico por Produto (Sazonalidade)</h2>
+          </div>
+          <div class="historico-filtros">
+            <select id="historico-produto-select"></select>
+            <select id="historico-marca-select" disabled></select>
+          </div>
+          <div id="historico-range" class="chart-range">
+            <button type="button" class="range-btn" data-dias="30">30D</button>
+            <button type="button" class="range-btn active" data-dias="90">90D</button>
+            <button type="button" class="range-btn" data-dias="180">6M</button>
+            <button type="button" class="range-btn" data-dias="365">1A</button>
+            <button type="button" class="range-btn" data-dias="all">Tudo</button>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="historico-produto-canvas"></canvas>
+            <div id="historico-produto-tooltip" class="chart-tooltip"></div>
+          </div>
+          <div class="chart-summary">
+            <span id="historico-produto-summary" class="chart-sub">Selecione um produto e uma marca para ver o historico.</span>
+            <span id="historico-max-label" class="chart-sub"></span>
+            <span id="historico-min-label" class="chart-sub"></span>
+          </div>
+        </section>
       </section>
     </div>
 
-    <script type="module" src="assets/js/main-dashboard.js?v=20260423-15"></script>
+    <script type="module" src="assets/js/main-dashboard.js?v=20260423-17"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {

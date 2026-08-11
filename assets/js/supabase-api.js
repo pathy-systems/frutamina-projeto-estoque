@@ -5,12 +5,21 @@ import { state, supabaseClient } from "./state.js";
 import {
   TABLE_NAME,
   SNAPSHOT_TABLE,
+  HISTORICO_DIARIO_TABLE,
+  USER_LABELS_TABLE,
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
   PUBLIC_CACHE_KEY,
   PUBLIC_CACHE_AT_KEY,
+  SUPABASE_TIMEOUT_MS,
 } from "./config.js";
-import { pushMessage, fetchWithTimeout, toNonNegativeInt, getSpecialTipoVariantByValue } from "./utils.js";
+import {
+  pushMessage,
+  fetchWithTimeout,
+  toNonNegativeInt,
+  getSpecialTipoVariantByValue,
+  withTimeout,
+} from "./utils.js";
 import {
   aggregateRows,
   hydrateInventoryRow,
@@ -43,6 +52,55 @@ export async function loadSnapshotRecords(options = {}) {
   state.snapshotRows = data || [];
   renderDashboardIfLoaded();
   return { data: state.snapshotRows, error: null };
+}
+
+// Serie diaria de um produto+marca (para o grafico de sazonalidade da Visao
+// Geral) — 1 linha por dia, gravada pelo cron `capturar_historico_diario`
+// no Supabase (ver supabase-historico-diario.sql).
+export async function loadHistoricoDiario(produto, marca) {
+  try {
+    const { data, error } = await withTimeout(
+      supabaseClient
+        .from(HISTORICO_DIARIO_TABLE)
+        .select("data,total_caixas")
+        .eq("produto", produto)
+        .eq("marca", marca)
+        .order("data", { ascending: true }),
+      SUPABASE_TIMEOUT_MS,
+      "Tempo limite ao carregar o historico do produto."
+    );
+    if (error) {
+      pushMessage("error", `Erro ao carregar historico do produto: ${error.message}`);
+      return [];
+    }
+    return data || [];
+  } catch (error) {
+    pushMessage("error", error?.message || "Erro ao carregar historico do produto.");
+    return [];
+  }
+}
+
+// Nomes dos operadores, visiveis pra todos os usuarios/aparelhos (nao so pra
+// quem ja logou localmente) — ver formatUserLabel em tables.js.
+export async function loadUserLabels() {
+  try {
+    const { data, error } = await withTimeout(
+      supabaseClient.from(USER_LABELS_TABLE).select("user_id,label"),
+      SUPABASE_TIMEOUT_MS,
+      "Tempo limite ao carregar nomes de usuarios."
+    );
+    if (error) {
+      console.warn("Erro ao carregar nomes de usuarios:", error.message);
+      return;
+    }
+    const map = {};
+    (data || []).forEach((row) => {
+      if (row.user_id) map[row.user_id] = row.label;
+    });
+    state.userLabels = map;
+  } catch (error) {
+    console.warn("Erro ao carregar nomes de usuarios:", error?.message || error);
+  }
 }
 
 function isSnapshotOutflowSchemaError(error) {

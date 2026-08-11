@@ -1,8 +1,8 @@
 // Tabelas principais (estoque publico e contagem), resumos matriciais, contexto e "ultima atualizacao".
 // Import dinamico para o formulario manual/edicao: mantem tables.js utilizavel em index.html
 // sem carregar manual-form.js la (o botao de acoes so existe quando PAGE_MODE === "edit").
-import { state, elements, PAGE_MODE } from "./state.js";
-import { CONFIG_GERAL } from "./config.js";
+import { state, elements, PAGE_MODE, supabaseClient } from "./state.js";
+import { CONFIG_GERAL, USER_LABELS_TABLE, SUPABASE_TIMEOUT_MS } from "./config.js";
 import {
   getRowKey,
   normalizeText,
@@ -13,6 +13,7 @@ import {
   listBrands,
   setSelectOptions,
   pushMessage,
+  withTimeout,
 } from "./utils.js";
 import { hydrateInventoryRow, applyInventoryDeltas, formatInventoryStack } from "./inventory-core.js";
 import { scheduleCountDraftPersist } from "./draft.js";
@@ -48,11 +49,25 @@ function formatTime(value) {
   }).format(date);
 }
 
-export function storeUserLabel(userId, email) {
+// Grava o nome do operador no Supabase (visivel pra qualquer usuario/aparelho
+// depois, via state.userLabels) e mantem o cache local antigo como fallback
+// offline. Upsert nao precisa ser aguardado pelo chamador.
+export async function storeUserLabel(userId, email) {
   if (!userId || !email) return;
   const label = displayUserFromEmail(email);
   if (!label) return;
   localStorage.setItem(`cd_user_label_${userId}`, label);
+  state.userLabels[userId] = label;
+  try {
+    const { error } = await withTimeout(
+      supabaseClient.from(USER_LABELS_TABLE).upsert({ user_id: userId, label }),
+      SUPABASE_TIMEOUT_MS,
+      "Tempo limite ao salvar nome do usuario."
+    );
+    if (error) console.warn("Erro ao salvar nome do usuario:", error.message);
+  } catch (error) {
+    console.warn("Erro ao salvar nome do usuario:", error?.message || error);
+  }
 }
 
 function getStoredUserLabel(userId) {
@@ -65,6 +80,7 @@ export function formatUserLabel(userId) {
   if (state.user?.id && userId === state.user.id) {
     return displayUserFromEmail(state.user.email);
   }
+  if (state.userLabels[userId]) return state.userLabels[userId];
   const stored = getStoredUserLabel(userId);
   if (stored) return stored;
   const raw = String(userId);

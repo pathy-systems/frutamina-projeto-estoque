@@ -48,6 +48,11 @@ export const state = {
   countDraftHash: "",
   catalogAdditions: [],
   catalogRemovals: [],
+  historicoProduto: null,
+  historicoMarca: null,
+  historicoRangeDias: 90,
+  historicoSerie: [],
+  userLabels: {},
 };
 
 export const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -225,6 +230,14 @@ export const elements = {
   ovBrandChart: document.getElementById("ov-brand-chart"),
   ovBrandChartTotal: document.getElementById("ov-brand-chart-total"),
   ovBrandGrid: document.getElementById("ov-brand-grid"),
+  historicoProdutoSelect: document.getElementById("historico-produto-select"),
+  historicoMarcaSelect: document.getElementById("historico-marca-select"),
+  historicoRange: document.getElementById("historico-range"),
+  historicoCanvas: document.getElementById("historico-produto-canvas"),
+  historicoTooltip: document.getElementById("historico-produto-tooltip"),
+  historicoSummary: document.getElementById("historico-produto-summary"),
+  historicoMaxLabel: document.getElementById("historico-max-label"),
+  historicoMinLabel: document.getElementById("historico-min-label"),
 };
 
 export const PAGE_MODE = document.body?.dataset?.page || "view";

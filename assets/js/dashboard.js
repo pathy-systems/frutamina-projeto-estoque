@@ -225,7 +225,9 @@ function formatTooltipDate(date, range) {
   return new Intl.DateTimeFormat("pt-BR", options).format(date);
 }
 
-function renderLineChart(canvas, series, options = {}) {
+// Exportada para reuso pelo grafico de historico por produto (historico-produto.js) —
+// desenho de canvas generico a partir de {values, dates}, sem saber de dominio.
+export function renderLineChart(canvas, series, options = {}) {
   if (!canvas) return;
   const values = series?.values || [];
   const dates = series?.dates || [];

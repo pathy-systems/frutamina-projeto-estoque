@@ -12,7 +12,8 @@ import {
   showNotificationInvite,
 } from "./auth-ui.js";
 import { setupDashboard, renderDashboard } from "./dashboard.js";
-import { loadPublicRecords, loadSnapshotRecords } from "./supabase-api.js";
+import { loadPublicRecords, loadSnapshotRecords, loadUserLabels } from "./supabase-api.js";
+import { setupHistoricoProduto } from "./historico-produto.js";
 
 await loadCatalogOverrides();
 initSetorSelects();
@@ -23,8 +24,10 @@ if (isRestrictedPageMode()) {
 }
 setSidebarOpen(false);
 setupDashboard();
+setupHistoricoProduto();
 setupAuth();
 loadPublicRecords();
+loadUserLabels();
 if (PAGE_MODE === "dashboard") {
   loadSnapshotRecords();
 }

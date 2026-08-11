@@ -1293,6 +1293,30 @@ th {
   font-weight: 700;
 }
 
+.historico-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.historico-filtros select {
+  width: auto;
+  flex: 1 1 200px;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: #1e2d46;
+  color: #dbe7ff;
+}
+
+#historico-produto-canvas {
+  height: 220px;
+}
+
+.chart-summary .chart-sub:first-child {
+  color: #f8fafc;
+  font-weight: 600;
+}
+
 body[data-page="dashboard"] {
   background: radial-gradient(circle at top, #0f172a 0%, #020617 48%, #010409 100%);
   color: #dbe7ff;
@@ -1406,6 +1430,7 @@ body[data-page="dashboard"] .hero {
   border-radius: 15px;
   background: linear-gradient(145deg, rgba(12, 18, 30, 0.96), rgba(11, 18, 32, 0.92));
   overflow: hidden;
+  padding: 1rem;
 }
 
 .overview-card-head {

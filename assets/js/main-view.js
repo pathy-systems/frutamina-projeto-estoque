@@ -22,7 +22,7 @@ import {
   setupCountTableEvents,
 } from "./tables.js";
 import { setupCommandEvents } from "./voice-actions.js";
-import { loadPublicRecords } from "./supabase-api.js";
+import { loadPublicRecords, loadUserLabels } from "./supabase-api.js";
 
 await loadCatalogOverrides();
 initSetorSelects();
@@ -43,6 +43,7 @@ if (isRestrictedPageMode()) {
 setSidebarOpen(false);
 setupAuth();
 loadPublicRecords();
+loadUserLabels();
 setInterval(enforceSessionLimit, 60 * 1000);
 
 window.addEventListener("load", () => {
