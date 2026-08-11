@@ -167,19 +167,30 @@ export async function saveNewCount() {
     }
     const oldIds = (existingRows || []).map((row) => row.id).filter(Boolean);
 
-    const payload = currentRows.map((row) =>
+    // caixas_avulsas SEMPRE no payload: no upsert, coluna ausente nao entra no
+    // UPDATE, entao o valor antigo da linha sobreviveria e o trigger somaria
+    // ele no total_caixas novo. Tambem evita payload com chaves diferentes
+    // entre linhas, que o PostgREST preenche com NULL (coluna e NOT NULL).
+    const payload = aggregateRows(currentRows).map((row) =>
       buildDbRowPayload(
         {
           ...row,
           user_id: state.user.id,
         },
         true,
-        row.caixas_avulsas > 0
+        true
       )
     );
 
+    // Upsert (nao insert) porque a unique (user_id, setor, produto, marca,
+    // tipo) colide com as proprias linhas antigas do usuario, que so sao
+    // apagadas depois. O upsert reaproveita o id da linha existente, entao
+    // esses ids saem da lista de exclusao mais abaixo.
     const insertResult = await withTimeout(
-      supabaseClient.from(TABLE_NAME).insert(payload),
+      supabaseClient
+        .from(TABLE_NAME)
+        .upsert(payload, { onConflict: "user_id,setor,produto,marca,tipo" })
+        .select("id"),
       SUPABASE_TIMEOUT_MS,
       "Tempo limite ao enviar a nova contagem."
     );
@@ -193,10 +204,13 @@ export async function saveNewCount() {
       return;
     }
 
+    const keptIds = new Set((insertResult?.data || []).map((row) => row.id));
+    const idsToDelete = oldIds.filter((id) => !keptIds.has(id));
+
     let duplicatesWarning = "";
-    if (oldIds.length) {
+    if (idsToDelete.length) {
       const deleteResult = await withTimeout(
-        supabaseClient.from(TABLE_NAME).delete().in("id", oldIds),
+        supabaseClient.from(TABLE_NAME).delete().in("id", idsToDelete),
         SUPABASE_TIMEOUT_MS,
         "Tempo limite ao remover a contagem antiga."
       );
