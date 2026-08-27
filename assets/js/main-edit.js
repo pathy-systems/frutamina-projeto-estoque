@@ -1,6 +1,9 @@
 // Entry point de editar.html (voz, formulario manual, edicao, nova contagem offline).
 import { state, isRestrictedPageMode } from "./state.js";
-import { loadCatalogOverrides } from "./catalog-overrides.js";
+import {
+  applyCatalogOverridesFromCache,
+  refreshCatalogOverrides,
+} from "./catalog-overrides.js";
 import {
   initSetorSelects,
   setupTheme,
@@ -26,7 +29,7 @@ import { initManualForm, setupManualFormEvents } from "./manual-form.js";
 import { setupCountModeEvents, updateCountModeUI } from "./count-mode.js";
 import { loadPublicRecords, loadUserLabels } from "./supabase-api.js";
 
-await loadCatalogOverrides();
+applyCatalogOverridesFromCache();
 initSetorSelects();
 initManualForm();
 buildFilterOptions();
@@ -54,4 +57,12 @@ setInterval(enforceSessionLimit, 60 * 1000);
 
 window.addEventListener("load", () => {
   setTimeout(showNotificationInvite, 2000);
+});
+
+// Catalogo global vem do Supabase, mas nao pode bloquear o boot: a UI ja subiu
+// com o cache local acima e so re-renderiza se a rede trouxer algo diferente.
+refreshCatalogOverrides().then((changed) => {
+  if (changed) {
+    import("./catalog-crud.js").then((m) => m.refreshCatalogDependentUI());
+  }
 });

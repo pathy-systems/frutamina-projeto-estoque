@@ -157,7 +157,7 @@ function renderCatalogTable() {
     .join("");
 }
 
-function refreshCatalogDependentUI() {
+export function refreshCatalogDependentUI() {
   const previousManualSetor = elements.manualSetor?.value || "";
   const previousCatalogSetor = elements.catalogSetor?.value || "";
   sanitizeContextAfterCatalogChange();

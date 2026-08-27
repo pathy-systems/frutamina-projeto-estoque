@@ -283,9 +283,39 @@ export async function resetAllCatalogOverrides() {
   }
 }
 
-export async function loadCatalogOverrides() {
-  let additions;
-  let removals;
+function commitCatalogOverrides(additions, removals) {
+  const additionKeys = new Set(additions.map((entry) => buildCatalogEntryKey(entry)));
+  state.catalogAdditions = additions;
+  state.catalogRemovals = removals.filter(
+    (entry) => !additionKeys.has(buildCatalogEntryKey(entry))
+  );
+  applyCatalogOverridesFromState();
+}
+
+function catalogStateFingerprint() {
+  return JSON.stringify([state.catalogAdditions, state.catalogRemovals]);
+}
+
+// Aplica o catalogo a partir do cache local, de forma sincrona. Roda no boot de
+// todas as paginas para a UI ja montar com o catalogo correto sem esperar rede.
+export function applyCatalogOverridesFromCache() {
+  commitCatalogOverrides(
+    dedupeCatalogEntries(
+      readCatalogCacheArray(CATALOG_ADDITIONS_KEY),
+      normalizeCatalogAdditionEntry
+    ),
+    dedupeCatalogEntries(
+      readCatalogCacheArray(CATALOG_REMOVALS_KEY),
+      normalizeCatalogRemovalEntry
+    )
+  );
+}
+
+// Busca o catalogo global no Supabase em background e reaplica se mudou.
+// Devolve true quando o resultado difere do que ja estava aplicado, para o
+// chamador re-renderizar a UI dependente de catalogo apenas nesse caso.
+export async function refreshCatalogOverrides() {
+  const before = catalogStateFingerprint();
   try {
     const { data, error } = await withTimeout(
       supabaseClient.from(CATALOG_TABLE).select("*"),
@@ -293,33 +323,21 @@ export async function loadCatalogOverrides() {
       "Tempo limite ao carregar o catalogo."
     );
     if (error) throw error;
-    additions = dedupeCatalogEntries(
+    const additions = dedupeCatalogEntries(
       (data || []).filter((row) => row.kind === "addition"),
       rowToAddition
     );
-    removals = dedupeCatalogEntries(
+    const removals = dedupeCatalogEntries(
       (data || []).filter((row) => row.kind === "removal"),
       rowToRemoval
     );
     writeCatalogCache(additions, removals);
+    commitCatalogOverrides(additions, removals);
   } catch (error) {
-    console.warn("Nao foi possivel carregar o catalogo do Supabase, usando cache local.", error);
-    additions = dedupeCatalogEntries(
-      readCatalogCacheArray(CATALOG_ADDITIONS_KEY),
-      normalizeCatalogAdditionEntry
-    );
-    removals = dedupeCatalogEntries(
-      readCatalogCacheArray(CATALOG_REMOVALS_KEY),
-      normalizeCatalogRemovalEntry
-    );
+    console.warn("Nao foi possivel carregar o catalogo do Supabase, mantendo cache local.", error);
+    return false;
   }
-
-  const additionKeys = new Set(additions.map((entry) => buildCatalogEntryKey(entry)));
-  state.catalogAdditions = additions;
-  state.catalogRemovals = removals.filter(
-    (entry) => !additionKeys.has(buildCatalogEntryKey(entry))
-  );
-  applyCatalogOverridesFromState();
+  return catalogStateFingerprint() !== before;
 }
 
 export function sanitizeContextAfterCatalogChange() {

@@ -12,6 +12,8 @@ import {
   PUBLIC_CACHE_KEY,
   PUBLIC_CACHE_AT_KEY,
   SUPABASE_TIMEOUT_MS,
+  SUPABASE_READ_TIMEOUT_MS,
+  SNAPSHOT_FETCH_LIMIT,
 } from "./config.js";
 import {
   pushMessage,
@@ -34,10 +36,23 @@ function renderDashboardIfLoaded() {
 
 export async function loadSnapshotRecords(options = {}) {
   const { showError = false } = options;
-  const { data, error } = await supabaseClient
-    .from(SNAPSHOT_TABLE)
-    .select("*")
-    .order("created_at", { ascending: true });
+  // Ordena DESC + limit para aproveitar idx_snapshots_created_at e nao puxar o
+  // historico inteiro; o dashboard consome em ordem crescente, dai o reverse().
+  let data;
+  let error;
+  try {
+    ({ data, error } = await withTimeout(
+      supabaseClient
+        .from(SNAPSHOT_TABLE)
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(SNAPSHOT_FETCH_LIMIT),
+      SUPABASE_READ_TIMEOUT_MS,
+      "Tempo limite ao carregar o historico."
+    ));
+  } catch (timeoutError) {
+    error = timeoutError;
+  }
 
   if (error) {
     if (showError) {
@@ -49,7 +64,7 @@ export async function loadSnapshotRecords(options = {}) {
     return { data: null, error };
   }
 
-  state.snapshotRows = data || [];
+  state.snapshotRows = (data || []).reverse();
   renderDashboardIfLoaded();
   return { data: state.snapshotRows, error: null };
 }
@@ -103,6 +118,16 @@ export async function loadUserLabels() {
   }
 }
 
+// Escritas nunca devem rejeitar: os chamadores (voz, formulario manual) fazem
+// await sem try/catch e um timeout solto travaria o fluxo de lancamento.
+async function runWrite(query, timeoutMessage) {
+  try {
+    return await withTimeout(query, SUPABASE_TIMEOUT_MS, timeoutMessage);
+  } catch (error) {
+    return { data: null, error };
+  }
+}
+
 function isSnapshotOutflowSchemaError(error) {
   const message = error?.message || "";
   return /outflow_caixas/i.test(message);
@@ -123,7 +148,10 @@ export async function saveSnapshotRecord({ rows, outflowCaixas = 0, showSuccess 
     payload.outflow_caixas = outflowCaixas;
   }
 
-  const { error } = await supabaseClient.from(SNAPSHOT_TABLE).insert(payload);
+  const { error } = await runWrite(
+    supabaseClient.from(SNAPSHOT_TABLE).insert(payload),
+    "Tempo limite ao salvar o historico."
+  );
   if (error) {
     const message = isSnapshotOutflowSchemaError(error)
       ? "Historico salvo sem saida. Rode a migracao do dashboard no Supabase."
@@ -160,9 +188,17 @@ function loadPublicCache() {
 }
 
 export async function loadPublicRecords() {
-  const { data, error } = await supabaseClient
-    .from(TABLE_NAME)
-    .select("*");
+  let data;
+  let error;
+  try {
+    ({ data, error } = await withTimeout(
+      supabaseClient.from(TABLE_NAME).select("*"),
+      SUPABASE_READ_TIMEOUT_MS,
+      "Tempo limite ao carregar o estoque."
+    ));
+  } catch (timeoutError) {
+    error = timeoutError;
+  }
 
   if (error) {
     const cached = loadPublicCache();
@@ -206,10 +242,17 @@ export async function loadUserRecords(options = {}) {
     renderCountTable();
     return { data: [], error: null };
   }
-  const { data, error } = await supabaseClient
-    .from(TABLE_NAME)
-    .select("*")
-    .eq("user_id", state.user.id);
+  let data;
+  let error;
+  try {
+    ({ data, error } = await withTimeout(
+      supabaseClient.from(TABLE_NAME).select("*").eq("user_id", state.user.id),
+      SUPABASE_READ_TIMEOUT_MS,
+      "Tempo limite ao carregar itens do usuario."
+    ));
+  } catch (timeoutError) {
+    error = timeoutError;
+  }
 
   if (error) {
     if (showError) {
@@ -243,15 +286,18 @@ export async function upsertRecord({
   caixasAvulsasDelta = 0,
 }) {
   if (!state.user) return false;
-  const { data: existing, error: selectError } = await supabaseClient
-    .from(TABLE_NAME)
-    .select("*")
-    .eq("user_id", state.user.id)
-    .eq("setor", setor)
-    .eq("produto", produto)
-    .eq("marca", marca)
-    .in("tipo", buildTipoSearchValues(produto, tipo))
-    .maybeSingle();
+  const { data: existing, error: selectError } = await runWrite(
+    supabaseClient
+      .from(TABLE_NAME)
+      .select("*")
+      .eq("user_id", state.user.id)
+      .eq("setor", setor)
+      .eq("produto", produto)
+      .eq("marca", marca)
+      .in("tipo", buildTipoSearchValues(produto, tipo))
+      .maybeSingle(),
+    "Tempo limite ao consultar o registro."
+  );
 
   if (selectError) {
     pushMessage("error", `Erro ao consultar registro: ${selectError.message}`);
@@ -273,10 +319,10 @@ export async function upsertRecord({
       updated.caixas_avulsas > 0 ||
       toNonNegativeInt(caixasAvulsasDelta, 0) > 0
     );
-    const { error } = await supabaseClient
-      .from(TABLE_NAME)
-      .update(payload)
-      .eq("id", existing.id);
+    const { error } = await runWrite(
+      supabaseClient.from(TABLE_NAME).update(payload).eq("id", existing.id),
+      "Tempo limite ao atualizar o registro."
+    );
 
     if (error) {
       const message = isLooseBoxesSchemaError(error)
@@ -296,9 +342,10 @@ export async function upsertRecord({
       pallets: palletsDelta,
       caixas_avulsas: caixasAvulsasDelta,
     });
-    const { error } = await supabaseClient
-      .from(TABLE_NAME)
-      .insert(buildDbRowPayload(newRow, true));
+    const { error } = await runWrite(
+      supabaseClient.from(TABLE_NAME).insert(buildDbRowPayload(newRow, true)),
+      "Tempo limite ao salvar o registro."
+    );
 
     if (error) {
       const message = isLooseBoxesSchemaError(error)

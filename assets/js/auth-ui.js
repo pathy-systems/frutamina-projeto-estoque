@@ -2,8 +2,13 @@
 // Import dinamico para modulos especificos de pagina (dashboard, count-mode, catalog-crud):
 // este modulo roda em TODAS as paginas, mas essas features nao existem em todas.
 import { state, elements, supabaseClient, PAGE_MODE, isRestrictedPageMode } from "./state.js";
-import { CONFIG_GERAL, SESSION_MAX_MS, THEME_PREFERENCE_KEY } from "./config.js";
-import { pushMessage, toAuthEmail, displayUserFromEmail } from "./utils.js";
+import {
+  CONFIG_GERAL,
+  SESSION_MAX_MS,
+  THEME_PREFERENCE_KEY,
+  SUPABASE_TIMEOUT_MS,
+} from "./config.js";
+import { pushMessage, toAuthEmail, displayUserFromEmail, withTimeout } from "./utils.js";
 import { renderContext, renderCountTable, renderCountSyncStatus, storeUserLabel } from "./tables.js";
 import { restoreCountDraftForCurrentUser } from "./draft.js";
 import { loadUserRecords } from "./supabase-api.js";
@@ -496,12 +501,16 @@ async function savePushSubscription(subscription) {
   if (!state.user) return;
 
   try {
-    const { error } = await supabaseClient
-      .from("push_subscriptions")
-      .upsert({
-        user_id: state.user.id,
-        subscription: subscription,
-      }, { onConflict: "user_id,subscription" });
+    const { error } = await withTimeout(
+      supabaseClient
+        .from("push_subscriptions")
+        .upsert({
+          user_id: state.user.id,
+          subscription: subscription,
+        }, { onConflict: "user_id,subscription" }),
+      SUPABASE_TIMEOUT_MS,
+      "Tempo limite ao salvar assinatura de push."
+    );
 
     if (error) throw error;
     console.log("Assinatura de push salva no Supabase.");

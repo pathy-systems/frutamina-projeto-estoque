@@ -415,11 +415,20 @@ export async function removeRow(row) {
   }
 
   if (!state.user) return;
-  const { error } = await supabaseClient
-    .from(TABLE_NAME)
-    .delete()
-    .eq("id", rowKey)
-    .eq("user_id", state.user.id);
+  let error;
+  try {
+    ({ error } = await withTimeout(
+      supabaseClient
+        .from(TABLE_NAME)
+        .delete()
+        .eq("id", rowKey)
+        .eq("user_id", state.user.id),
+      SUPABASE_TIMEOUT_MS,
+      "Tempo limite ao remover o item."
+    ));
+  } catch (timeoutError) {
+    error = timeoutError;
+  }
   if (error) {
     pushMessage("error", `Erro ao remover item: ${error.message}`);
     return;

@@ -1,6 +1,9 @@
 // Entry point de index.html (estoque publico + comando de texto).
 import { state, isRestrictedPageMode } from "./state.js";
-import { loadCatalogOverrides } from "./catalog-overrides.js";
+import {
+  applyCatalogOverridesFromCache,
+  refreshCatalogOverrides,
+} from "./catalog-overrides.js";
 import {
   initSetorSelects,
   setupTheme,
@@ -24,7 +27,7 @@ import {
 import { setupCommandEvents } from "./voice-actions.js";
 import { loadPublicRecords, loadUserLabels } from "./supabase-api.js";
 
-await loadCatalogOverrides();
+applyCatalogOverridesFromCache();
 initSetorSelects();
 buildFilterOptions();
 renderContext();
@@ -48,4 +51,12 @@ setInterval(enforceSessionLimit, 60 * 1000);
 
 window.addEventListener("load", () => {
   setTimeout(showNotificationInvite, 2000);
+});
+
+// Catalogo global vem do Supabase, mas nao pode bloquear o boot: a UI ja subiu
+// com o cache local acima e so re-renderiza se a rede trouxer algo diferente.
+refreshCatalogOverrides().then((changed) => {
+  if (changed) {
+    import("./catalog-crud.js").then((m) => m.refreshCatalogDependentUI());
+  }
 });

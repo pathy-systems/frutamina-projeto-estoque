@@ -9,6 +9,12 @@ export const HISTORICO_DIARIO_TABLE = "estoque_historico_diario";
 export const USER_LABELS_TABLE = "usuarios_label";
 export const SESSION_MAX_MS = 60 * 60 * 1000;
 export const SUPABASE_TIMEOUT_MS = 45000;
+// Leituras do boot usam um limite curto: passado isso vale mais servir o cache
+// local do que deixar a tela esperando.
+export const SUPABASE_READ_TIMEOUT_MS = 12000;
+// Teto de snapshots carregados (mais recentes primeiro). Sem isso a Visao Geral
+// fica mais lenta a cada contagem salva, para sempre.
+export const SNAPSHOT_FETCH_LIMIT = 5000;
 export const PUBLIC_CACHE_KEY = "cd_public_cache";
 export const PUBLIC_CACHE_AT_KEY = "cd_public_cache_at";
 export const COUNT_DRAFT_KEY_PREFIX = "cd_count_draft_v1";

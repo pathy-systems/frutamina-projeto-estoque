@@ -7,8 +7,8 @@
   - atualizar o cache automaticamente quando a versao muda.
 */
 
-const STATIC_CACHE = "frutamina-static-v41";
-const RUNTIME_CACHE = "frutamina-runtime-v41";
+const STATIC_CACHE = "frutamina-static-v42";
+const RUNTIME_CACHE = "frutamina-runtime-v42";
 
 const APP_SHELL = [
   "./",
@@ -18,10 +18,10 @@ const APP_SHELL = [
   "./visao-geral.html",
   "./manifest.webmanifest",
   "./styles.css?v=20260423-13",
-  "./assets/js/main-view.js?v=20260423-17",
-  "./assets/js/main-edit.js?v=20260423-17",
-  "./assets/js/main-dashboard.js?v=20260423-20",
-  "./assets/js/main-products.js?v=20260423-17",
+  "./assets/js/main-view.js?v=20260423-18",
+  "./assets/js/main-edit.js?v=20260423-18",
+  "./assets/js/main-dashboard.js?v=20260423-21",
+  "./assets/js/main-products.js?v=20260423-18",
   "./assets/img/logo.webp",
   "./assets/img/capa.png",
   "./assets/img/icon-192.png",
@@ -50,37 +50,27 @@ async function cacheAppShell() {
   );
 }
 
-async function networkFirst(request) {
-  const cache = await caches.open(RUNTIME_CACHE);
-
-  try {
-    const response = await fetch(request);
-    cache.put(request, response.clone());
-    return response;
-  } catch (error) {
-    const cached =
-      (await caches.match(request)) ||
-      (await caches.match("./editar.html")) ||
-      (await caches.match("./index.html"));
-
-    if (cached) {
-      return cached;
-    }
-
-    throw error;
-  }
-}
-
 async function staleWhileRevalidate(request) {
   const cache = await caches.open(RUNTIME_CACHE);
   const cached = await caches.match(request);
 
   const fetchPromise = fetch(request)
     .then((response) => {
-      cache.put(request, response.clone());
+      // Erro (404/500) nao pode entrar no cache, e resposta redirecionada nao
+      // pode ser servida do cache para uma navegacao.
+      if (response.ok && !response.redirected) {
+        cache.put(request, response.clone());
+      }
       return response;
     })
-    .catch(() => cached || Response.error());
+    .catch(async () => {
+      if (cached) return cached;
+      if (request.mode === "navigate") {
+        const shell = await caches.match("./index.html");
+        if (shell) return shell;
+      }
+      return Response.error();
+    });
 
   return cached || fetchPromise;
 }
@@ -107,11 +97,6 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (isSupabaseApiRequest(url)) return;
-
-  if (request.mode === "navigate") {
-    event.respondWith(networkFirst(request));
-    return;
-  }
 
   event.respondWith(staleWhileRevalidate(request));
 });
