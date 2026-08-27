@@ -7,6 +7,8 @@ import {
   SESSION_MAX_MS,
   THEME_PREFERENCE_KEY,
   SUPABASE_TIMEOUT_MS,
+  NOTIFICATION_INVITE_DISMISSED_AT_KEY,
+  NOTIFICATION_INVITE_SNOOZE_MS,
 } from "./config.js";
 import { pushMessage, toAuthEmail, displayUserFromEmail, withTimeout } from "./utils.js";
 import { renderContext, renderCountTable, renderCountSyncStatus, storeUserLabel } from "./tables.js";
@@ -550,10 +552,33 @@ async function requestNotificationPermission() {
  * Cria e exibe um convite amigável para ativar notificações,
  * garantindo a interação do usuário exigida pelos navegadores.
  */
+function isNotificationInviteSnoozed() {
+  try {
+    const raw = localStorage.getItem(NOTIFICATION_INVITE_DISMISSED_AT_KEY);
+    if (!raw) return false;
+    const dismissedAt = Number(raw);
+    if (!Number.isFinite(dismissedAt)) return false;
+    return Date.now() - dismissedAt < NOTIFICATION_INVITE_SNOOZE_MS;
+  } catch (error) {
+    console.warn("Nao foi possivel ler a dispensa do convite de notificacoes.", error);
+    return false;
+  }
+}
+
+function snoozeNotificationInvite() {
+  try {
+    localStorage.setItem(NOTIFICATION_INVITE_DISMISSED_AT_KEY, String(Date.now()));
+  } catch (error) {
+    console.warn("Nao foi possivel salvar a dispensa do convite de notificacoes.", error);
+  }
+}
+
 export function showNotificationInvite() {
   if (!("Notification" in window) || Notification.permission !== "default") {
     return;
   }
+  if (isNotificationInviteSnoozed()) return;
+  if (document.getElementById("notification-overlay")) return;
 
   const overlay = document.createElement("div");
   overlay.id = "notification-overlay";
@@ -623,6 +648,7 @@ export function showNotificationInvite() {
   const closeAll = () => {
     overlay.remove();
     styleSheet.remove();
+    snoozeNotificationInvite();
   };
 
   document.getElementById("notif-ignore").onclick = closeAll;

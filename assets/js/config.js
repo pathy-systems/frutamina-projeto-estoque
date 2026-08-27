@@ -21,6 +21,11 @@ export const COUNT_DRAFT_KEY_PREFIX = "cd_count_draft_v1";
 export const CATALOG_ADDITIONS_KEY = "cd_catalog_additions_v1";
 export const CATALOG_REMOVALS_KEY = "cd_catalog_removals_v1";
 export const THEME_PREFERENCE_KEY = "cd_theme_preference_v1";
+// Quando o usuario dispensou o convite de notificacoes, e por quanto tempo o
+// convite fica suprimido. Sem isso o convite reabre em cada troca de tela,
+// porque cada pagina e uma navegacao nova e a permissao segue "default".
+export const NOTIFICATION_INVITE_DISMISSED_AT_KEY = "cd_notification_invite_dismissed_at_v1";
+export const NOTIFICATION_INVITE_SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const CONFIG_GERAL = {
   
