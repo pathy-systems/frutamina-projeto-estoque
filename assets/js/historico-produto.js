@@ -9,6 +9,16 @@ import { renderLineChart } from "./dashboard.js";
 let chartMeta = null;
 let hoverIndex = null;
 
+function readThemeColor(token, fallback) {
+  const value = getComputedStyle(document.body).getPropertyValue(token).trim();
+  return value || fallback;
+}
+
+// Canvas nao aceita color-mix de forma confiavel; monta rgba a partir do hex do token.
+function withAlpha(color, alphaHex) {
+  return /^#[0-9a-f]{6}$/i.test(color) ? `${color}${alphaHex}` : color;
+}
+
 function formatDiaLabel(value) {
   const date = value ? new Date(`${value}T00:00:00`) : null;
   if (!date || Number.isNaN(date.getTime())) return "--";
@@ -71,11 +81,13 @@ function renderHistoricoChartAndSummary() {
   const dates = serieFiltrada.map((ponto) => new Date(`${ponto.data}T00:00:00`));
   const values = serieFiltrada.map((ponto) => ponto.total_caixas);
 
+  const accent = readThemeColor("--ov-green", "#2ee981");
   chartMeta = renderLineChart(elements.historicoCanvas, { dates, values }, {
-    lineColor: "#2ee981",
-    fillStart: "rgba(46, 233, 129, 0.35)",
-    fillEnd: "rgba(46, 233, 129, 0.05)",
-    labelColor: "rgba(148, 163, 184, 0.9)",
+    lineColor: accent,
+    fillStart: withAlpha(accent, "4d"),
+    fillEnd: withAlpha(accent, "0d"),
+    labelColor: readThemeColor("--ov-text-soft", "rgba(148, 163, 184, 0.9)"),
+    gridColor: readThemeColor("--ov-border", "rgba(148, 163, 184, 0.25)"),
     showLabels: true,
     height: 240,
     hoverIndex,
@@ -199,4 +211,9 @@ export function setupHistoricoProduto() {
   }
 
   attachHistoricoHover();
+
+  new MutationObserver(() => renderHistoricoChartAndSummary()).observe(document.body, {
+    attributes: true,
+    attributeFilter: ["data-theme"],
+  });
 }
