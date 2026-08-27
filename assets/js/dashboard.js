@@ -231,7 +231,8 @@ export function renderLineChart(canvas, series, options = {}) {
   if (!canvas) return;
   const values = series?.values || [];
   const dates = series?.dates || [];
-  const parentWidth = canvas.parentElement?.clientWidth || 900;
+  canvas.style.width = "";
+  const parentWidth = canvas.clientWidth || canvas.parentElement?.clientWidth || 900;
   const height = options.height || 260;
   const dpr = window.devicePixelRatio || 1;
   canvas.width = parentWidth * dpr;
@@ -244,8 +245,8 @@ export function renderLineChart(canvas, series, options = {}) {
   const padding = {
     top: 24,
     right: 20,
-    bottom: options.showLabels ? 32 : 16,
-    left: 42,
+    bottom: options.showLabels ? 34 : 16,
+    left: options.showLabels ? 40 : 12,
   };
   const width = parentWidth;
   const innerWidth = width - padding.left - padding.right;
@@ -264,12 +265,37 @@ export function renderLineChart(canvas, series, options = {}) {
 
   ctx.strokeStyle = options.gridColor || "rgba(148, 163, 184, 0.25)";
   ctx.lineWidth = 1;
+  ctx.font = "11px 'Inter', sans-serif";
+  ctx.fillStyle = options.labelColor || "rgba(148, 163, 184, 0.9)";
   for (let i = 0; i < 3; i += 1) {
     const y = padding.top + (innerHeight * i) / 2;
     ctx.beginPath();
     ctx.moveTo(padding.left, y);
     ctx.lineTo(width - padding.right, y);
     ctx.stroke();
+    if (options.showLabels) {
+      const value = maxValue - (range * i) / 2;
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText(Math.round(value).toLocaleString("pt-BR"), padding.left - 8, y);
+    }
+  }
+
+  if (options.showLabels && dates.length) {
+    const steps = Math.min(4, dates.length - 1);
+    ctx.textBaseline = "top";
+    for (let i = 0; i <= steps; i += 1) {
+      const index = steps ? Math.round((i * (dates.length - 1)) / steps) : 0;
+      const date = dates[index];
+      if (!date) continue;
+      const x = getX(index);
+      ctx.textAlign = i === 0 ? "left" : i === steps ? "right" : "center";
+      ctx.fillText(
+        new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(date),
+        x,
+        padding.top + innerHeight + 10
+      );
+    }
   }
 
   if (values.length) {

@@ -1308,8 +1308,43 @@ th {
   color: #dbe7ff;
 }
 
-#historico-produto-canvas {
-  height: 220px;
+.historico-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.historico-extremos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chart-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.chart-chip:empty {
+  display: none;
+}
+
+.chart-chip-max {
+  background: rgba(46, 233, 129, 0.12);
+  border-color: rgba(46, 233, 129, 0.35);
+  color: #6ff0aa;
+}
+
+.chart-chip-min {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.3);
+  color: #cbd5f5;
 }
 
 .chart-summary .chart-sub:first-child {

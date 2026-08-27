@@ -75,6 +75,9 @@ function renderHistoricoChartAndSummary() {
     lineColor: "#2ee981",
     fillStart: "rgba(46, 233, 129, 0.35)",
     fillEnd: "rgba(46, 233, 129, 0.05)",
+    labelColor: "rgba(148, 163, 184, 0.9)",
+    showLabels: true,
+    height: 240,
     hoverIndex,
   });
 
